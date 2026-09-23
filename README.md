@@ -1,121 +1,101 @@
 # LearningNeMo
 
-A NVIDIA NeMo Agent Toolkit task agent with hybrid input guardrails, Microsoft
-Entra authorization, per-tool scope and app-role checks, and a Key Vault-backed
-Azure API Management LLM gateway.
+LearningNeMo is a security-focused NVIDIA NeMo Agent Toolkit demonstration. It
+lets two Microsoft Entra users try the same task agent with different
+permissions: a Reader can inspect tasks, while an Operator can execute them.
+The walkthrough below takes you from a fresh clone to that local demo.
 
-For a reviewer-oriented reading order and package boundaries, start with the
-[`src/task_agent` source tour](src/task_agent/README.md).
+> **Choose the path that matches your goal**
+>
+> - **Offline/local validation** installs the locked dependencies and checks
+>   configuration and infrastructure templates. It makes no model calls or Azure
+>   requests.
+> - **The local agent and console** run on your machine, but they are *not*
+>   offline: sign-in needs Entra, and agent/guardrail model requests need the
+>   configured APIM gateway and model-provider access.
+> - **Cloud and SAW/OpenShell work** is optional, advanced infrastructure. See
+>   the [cloud demo guide](docs/cloud-demo.md) and
+>   [build and reproduction guide](docs/build-and-reproduce.md); it is not
+>   required for the first task-authorization demo.
 
-For setup, deployment gates, evidence, and cleanup, use the
-[build and reproduction guide](docs/build-and-reproduce.md). For an eight-minute
-interview walkthrough with expected outcomes and honest capability boundaries,
-use the [capability demonstration runbook](docs/capability-demo.md).
+## Before you start
 
-The [cloud demo guide](docs/cloud-demo.md) covers the Azure-hosted dashboard,
-private controller and NeMo API, managed identities, deployment verification,
-and scheduled cleanup. Cloud hosting and the full sandbox incident integration
-are separate acceptance results.
+Run the commands from the repository root in Linux or Ubuntu WSL2 (the recorded
+environment is Ubuntu 24.04 WSL2). Use a Linux Python environment, not a
+Windows virtual environment.
 
-The proposed Azure SQL, Secure Agent Workspace, OpenShell, identity, approval,
-and incident-response phase is defined in the
-[`next-phase SAW and OpenShell specification`](docs/next-phase-saw-openshell-spec.md).
-The [next-phase infrastructure](infra/next-phase/README.md) implements and has
-live-verified WP1 networking, six persistent WP2a identities, the
-VNet-integrated runtime, four credentialless WP2b audiences and workers, and a
-private Azure SQL control plane. Its reproducible incident cycle diagnoses and
-contains an owned unsafe query, persists a separate approval, performs bounded
-remediation, verifies recovery, records source-bound evidence, and removes its
-one-shot control compute. Runtime resources remain TTL-bound. On 2026-09-14,
-OpenShell bootstrap and the three sandbox policy probes succeeded on a private
-SAW VM. On 2026-09-15 the Azure runtime-lock rule was repaired and independent
-host verification passed. A new live Planning probe returned UID 998 and denied
-privilege escalation, but API requests timed out after NAT removal. Protected
-route connectivity, clean-host reproducibility, and the complete incident cycle
-through OpenShell remain unfinished.
+| For | You need |
+| --- | --- |
+| Local checks | Bash 4.4+, Python 3.11–3.13, and `uv` 0.8+ |
+| Infrastructure checks | Azure CLI 2.76+, Bicep 0.35+, and the local-check tools above |
+| Live demo | An Azure tenant and subscription, Azure CLI signed into the intended tenant/subscription, rights to administer the existing Entra applications and role assignments, access to deploy/use the APIM and Key Vault resources, model-provider access, and two distinct Entra test accounts |
 
-The whole agent is defined in `configs/agent.yml`:
+The tested tool versions are recorded in
+[`infra/next-phase/toolchain.json`](infra/next-phase/toolchain.json). Cloud
+deployment also depends on subscription policy, capacity, provider registration,
+and the relevant Azure/Entra permissions; this repository does not create a
+tenant or subscription for you.
 
-1. Azure API Management routes model requests and authenticates internal callers.
-2. Azure Key Vault stores the OpenAI and internal gateway keys.
-3. Microsoft Entra validates the caller and supplies delegated scopes plus assigned app roles.
-4. NeMo Guardrails masks PII locally, then runs a semantic self-check through a
-	dedicated APIM operation before the agent runs.
-5. Every tool enforces both its required scope and user role before executing.
-
-## Permissions
-
-| Capability | Required scope | Required app role |
-| --- | --- | --- |
-| Invoke the agent and read the current time | `agent.invoke` | `Task.Reader` |
-| List tasks | `tasks.read` | `Task.Reader` |
-| Execute a task or reset demo state | `tasks.execute` | `Task.Operator` |
-
-A [dedicated Approver account](docs/approver-account.md) now has only
-`Task.Approver`. It can sign into the common Demo session view without Reader or
-Operator permissions. The deployed private review service supports exact-plan
-decisions after explicit `plans.review` authorization. It cannot execute tasks
-or operate the workspace. See the [live checkpoint](docs/human-handoff-live-checkpoint.md)
-for the scheduled window and outstanding full-incident rehearsal.
-
-### One Client, Two Test Accounts
-
-Both users authenticate through one public client. The client receives the
-same delegated permissions for either user; API app-role assignments determine
-what each person may do:
-
-```text
-LearningNeMo Local Client
-|-- Reader account   -> roles: Task.Reader
-`-- Operator account -> roles: Task.Reader, Task.Operator
-
-Both tokens -> scp: agent.invoke tasks.read tasks.execute
-```
-
-The API requires both claims. For example, `execute_task` requires
-`tasks.execute` in `scp` **and** `Task.Operator` in `roles`. LearningNeMo uses a
-salted, process-local fingerprint to identify the current session without
-sending the underlying account ID or token to the browser. Direct user
-assignments keep the demo understandable. Production deployments often assign
-the same roles through governed Entra groups and Conditional Access.
-
-The public test client uses device-code authentication and never uses a client
-secret. The API validates token signature, issuer, audience, lifetime, scope,
-and role through Microsoft Entra JWKS plus the verified token payload.
-
-## Local Setup
-
-Open Ubuntu and install the locked dependencies into the Linux environment:
+## 1. Clone and install the locked environment
 
 ```bash
-cd /mnt/c/Users/aygul/Desktop/agents
-UV_PROJECT_ENVIRONMENT=/home/aygul/.venvs/nemo-agents ~/.local/bin/uv sync
+git clone https://github.com/ChrisHanna/LearningNemo.git
+cd LearningNemo
+
+export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/nemo-agents"
+"$HOME/.local/bin/uv" sync --frozen
 ```
 
-The locked environment includes Presidio and spaCy for local PII masking. It
-does not install GPT-2, Transformers, PyTorch, CUDA, or a separate guardrail
-model server.
+`uv sync --frozen` installs the versions in `uv.lock`, including the local PII
+masking dependencies. The `$HOME` path is portable and avoids putting a virtual
+environment in the repository. If your `uv` executable is elsewhere, use that
+path instead.
 
-## Configure Entra
-
-Azure CLI must be signed in to the target tenant. The script is idempotent and
-preserves existing scopes and Microsoft Graph permissions.
+For a safe first check, run:
 
 ```bash
+"$UV_PROJECT_ENVIRONMENT/bin/python" scripts/validate-agent-config.py
+```
+
+Expected result: two `PASS` lines confirming that the configuration loads with
+placeholder values. This does not authenticate, contact Azure, or call a model.
+
+<a id="configure-entra"></a>
+
+## 2. Configure Azure and Entra (one time)
+
+The following setup creates or reconciles application configuration and test-user
+role assignments. It is required before the live demo, but not for the offline
+check above.
+
+Sign in and deliberately verify the target subscription:
+
+```bash
+az login
+export AZURE_SUBSCRIPTION_ID="<expected-subscription-id>"
+test "$(az account show --query id --output tsv)" = "$AZURE_SUBSCRIPTION_ID"
+
 export ENTRA_TENANT_ID="<tenant-id>"
-export ENTRA_CLIENT_ID="<agent-api-client-id>"
-export ENTRA_PUBLIC_CLIENT_ID="<learningnemo-client-id>"
+export ENTRA_CLIENT_ID="<agent-api-application-client-id>"
+export ENTRA_PUBLIC_CLIENT_ID="<learningnemo-public-client-id>"
+```
 
+Replace each `<...>` value with an ID from the intended tenant. The Entra scripts
+also reject a signed-in Azure CLI tenant that does not match `ENTRA_TENANT_ID`.
+
+First preview the Entra changes, then explicitly apply them:
+
+```bash
 bash infra/configure-entra.sh
 bash infra/configure-entra.sh --apply
 ```
 
-It exposes `agent.invoke`, `tasks.read`, and `tasks.execute`, defines
-`Task.Reader` and `Task.Operator`, and configures one public client. After
-`--apply`, the script writes these non-secret IDs to the gitignored
-`.nemo-test-client.json` file used by the test client.
+The preview reports the planned scopes and roles. Applying configures
+`agent.invoke`, `tasks.read`, and `tasks.execute`; `Task.Reader` and
+`Task.Operator`; and the public client. It writes the non-secret IDs to the
+gitignored `.nemo-test-client.json` file used by the console and test client.
 
-After creating two tenant users, assign their API roles:
+Create or identify **two different** tenant users, then assign the demo roles:
 
 ```bash
 export ENTRA_READER_USER="reader-test@contoso.onmicrosoft.com"
@@ -125,226 +105,188 @@ bash infra/assign-entra-test-users.sh
 bash infra/assign-entra-test-users.sh --apply
 ```
 
-The assignment script fails if both identifiers resolve to the same user. It
-assigns `Task.Reader` to the Reader account, both roles to the Operator account,
-and then enables assignment-required on the API service principal.
+The Reader receives `Task.Reader`; the Operator receives both `Task.Reader` and
+`Task.Operator`. The script refuses to use the same user for both accounts and,
+when applied, makes assignment required on the API service principal.
 
-## Deploy The LLM Gateway
+<a id="deploy-the-llm-gateway"></a>
 
-The gateway uses the APIM Consumption tier. APIM's managed identity reads the
-real OpenAI key from Key Vault. The agent receives a separate generated gateway
-credential and cannot read the OpenAI key.
+## 3. Preview and deploy the LLM gateway (one time)
+
+The local agent deliberately fails closed without gateway settings: it does not
+fall back to a direct provider call. The gateway uses APIM and Key Vault; APIM
+uses a provider key while the agent gets only a separate internal gateway
+credential.
+
+Run local gateway-template checks, then review the non-mutating deployment
+preview:
 
 ```bash
+export LEARNINGNEMO_PYTHON="$UV_PROJECT_ENVIRONMENT/bin/python"
 bash infra/test-gateway-iac.sh
 bash infra/deploy-gateway.sh --what-if
 ```
 
-The deployment wrapper defaults to ARM validation and identifier-safe what-if.
-It reuses the existing APIM and OpenAI backend, adding a distinct
-`/guardrails/chat/completions` operation rather than another Azure service.
-That operation inherits gateway authentication, forces `gpt-4o-mini`,
-temperature `0`, a three-token response, and non-streaming mode, and removes
-tool/function fields before forwarding.
+`--what-if` validates and previews Azure changes, but still queries the selected
+Azure environment. It may report that a gateway preview is deferred until the
+platform resources exist.
 
-After reviewing what-if, apply through Bicep with a command-scoped subscription
-and acknowledgement:
+Applying can create billable APIM/Key Vault resources and may prompt, without
+echoing, for the provider API key on the first deployment. Review the preview
+first. To apply, retain the verified subscription value and use the explicit
+command-scoped acknowledgement:
 
 ```bash
-export AZURE_SUBSCRIPTION_ID="<expected-subscription-id>"
 LEARNINGNEMO_AZURE_APPLY=llm-gateway \
-	bash infra/deploy-gateway.sh --apply
+  bash infra/deploy-gateway.sh --apply
 ```
 
-On first deployment only, the script prompts for the OpenAI key without echoing
-it. Automation can pass `--openai-api-key-file` with an owner-only mode `0600`
-file outside the repository. Apply stores provider and internal gateway keys in
-Key Vault, deploys APIM declaratively, and smoke-tests both operations. Load the
-resulting endpoints and internal client credential into the current shell:
+The script checks that the active subscription equals
+`AZURE_SUBSCRIPTION_ID`, deploys the gateway, and smoke-tests both APIM
+operations. Do not put provider keys, tokens, or credentials in the repository.
+For unattended first setup, its `--openai-api-key-file` option requires an
+owner-only (`0600`) file outside the repository.
+
+## 4. Start the local API and console
+
+These are separate terminals. Both commands below start from the repository
+root. In a fresh terminal, restore the environment variables needed by the
+launchers.
+
+**Terminal 1 — API**
+
+```bash
+cd /path/to/LearningNemo
+export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/nemo-agents"
+export NAT_BIN="$UV_PROJECT_ENVIRONMENT/bin/nat"
+bash scripts/run-agent.sh
+```
+
+The launcher reads `.nemo-test-client.json`, loads the internal gateway
+credential with Azure CLI/Key Vault, disables telemetry, and starts the API on
+`http://127.0.0.1:8001`. A missing settings file, Entra ID, or gateway
+configuration is an intentional startup failure.
+
+**Terminal 2 — console**
+
+```bash
+cd /path/to/LearningNemo
+export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/nemo-agents"
+"$UV_PROJECT_ENVIRONMENT/bin/learningnemo"
+```
+
+Open `http://127.0.0.1:8765`. Both listeners are loopback-only; do not expose
+them publicly. The console uses Entra device-code sign-in and keeps tokens in
+its local server-side process, not in the browser.
+
+### Returning-user startup
+
+After the one-time Entra and gateway setup, repeat only the two terminal
+commands above. You may source the gateway script in a shell to inspect whether
+Azure access still works, but it is not needed before `run-agent.sh`:
 
 ```bash
 source scripts/load-gateway-env.sh
 ```
 
-## Run The API
+Sourcing matters: running that script directly intentionally exits because its
+environment variables would not persist.
+
+## 5. Try the authorization demo
+
+In the console, sign in first as the **Reader** account:
+
+1. List the pending tasks.
+2. Attempt the offered write/mutation step.
+3. Confirm the task state did not change after the expected denial.
+
+Then use **Switch account**, sign in as the **Operator**, and follow its
+walkthrough to reset the disposable state, execute `task-1`, and read back the
+completed state. The role comes from the verified Entra token; selecting a
+persona in the interface or passing a CLI flag cannot grant a role.
+
+For the same guided paths from a terminal, with the API running:
 
 ```bash
-bash scripts/run-agent.sh
+"$UV_PROJECT_ENVIRONMENT/bin/python" scripts/test_client.py \
+  --access reader --scenario authorization
+
+"$UV_PROJECT_ENVIRONMENT/bin/python" scripts/test_client.py \
+  --access operator --scenario authorization
 ```
 
-The launcher reads the non-secret Entra IDs from `.nemo-test-client.json`,
-loads only the internal APIM credential from Key Vault, disables telemetry,
-and binds the local API to `127.0.0.1:8001`. The workflow fails at startup when
-gateway configuration is absent, preventing an accidental direct OpenAI call.
-
-## Create A Review Archive
-
-Do not ZIP the working directory: it may contain virtual environments, caches,
-or local settings. Create an allowlisted, secret-scanned archive instead:
-
-```powershell
-.\scripts\create-review-archive.ps1
-```
-
-The archive includes only source, tests, infrastructure, configuration,
-documentation, the lockfile, and vendored licenses. It excludes `.env`, local
-Entra settings, virtual environments, caches, and build output.
-
-## Test Authorization
-
-### Visual Console
-
-With the agent API running, launch the local browser workspace:
+Sign in with the matching account when prompted. The client validates the
+expected role and uses device-code authentication. For a manual one-shot check:
 
 ```bash
-~/.venvs/nemo-agents/bin/learningnemo
+"$UV_PROJECT_ENVIRONMENT/bin/python" scripts/test_client.py \
+  --access reader --prompt "List the pending tasks."
 ```
 
-It opens `http://127.0.0.1:8765` and shows:
+A Reader mutation returning HTTP 403 is the expected security result, not a
+failure to bypass. The optional Approver path is separate; see
+[the Approver account guide](docs/approver-account.md).
 
-- a default Pattern view with a five-boundary authority flow, SAW/OpenShell
-	containment, and target persona permissions; diagram selections explain the
-	design and do not change the signed-in identity or execute actions;
-- a Live proof view with explicit configuration, timestamped cloud checks,
-	and an identity-to-Planning proof action; cloud transport is disabled unless
-	started with `--workspace-subscription <expected-subscription-id>`;
-- a Recorded evidence view with an interactive SAW/OpenShell topology, selectable
-	Planning/Execution/Probe policies, expected-versus-observed route results,
-	and exportable dated evidence summaries;
-- a Build & Decisions view with design rationale, tradeoffs, release contracts,
-	and an in-app reader for the build guide, presenter runbook, and diagnostic record;
-- one Demo session for all accounts: Reader denial test, Operator mutation
-	test, or Approver service availability, with technical tools in expandable sections;
-- shared account controls with real sign-in switching, next-action status,
-	read-only step previews, and separate running, verified, denied, and failed states;
-- live health and the secured request path from Entra through APIM;
-- a System view with active controls, hybrid Guardrails, scoped tools, and the
-	complete model/tool execution loop;
-- the current account's granted scopes, assigned roles, and detected persona;
-- a role-derived Reader or Operator walkthrough with exact access decisions;
-- Guardrail probe prompts for semantic injection detection and local PII masking;
-- a manual prompt workspace that follows the current user, request activity, and an
-	evidence panel that distinguishes observed behavior from configured policy.
+## Validate without deploying
 
-Tokens remain in memory in the localhost console process and are never sent to
-the browser. The browser receives only role status, scope names, the temporary
-device code, timings, and agent responses.
-
-The Recorded evidence tab is a curated engineering summary dated 2026-09-14, not a live
-Azure monitor or imported raw trace. It explicitly reports current cloud health
-as unknown, preserves the recorded runtime-lock failure, and keeps the separate
-incident cycle and pending sandbox integration distinct. Selecting a sandbox or
-story step never starts a cloud operation. The local agent health indicator is
-independent of those historical results.
-
-Each browser receives an isolated server-side session through an opaque,
-HttpOnly, SameSite cookie. Unsafe console requests require both an exact
-loopback Origin and a per-session CSRF token. The console serves all JavaScript
-locally, uses system fonts, and runs under a restrictive Content Security
-Policy.
-
-The walkthrough requires one sign-in. LearningNeMo derives the persona from the
-verified `roles` claim:
-
-- A `Task.Reader` account gets three steps: capture state, attempt a write, and
-	prove the denied write made no state change.
-- A `Task.Operator` account gets four steps: reset state, confirm pending,
-	execute a task, and verify completion.
-
-Walkthrough step IDs are resolved on the localhost server. The browser cannot
-choose a role or prompt. The server rejects a step belonging to another persona
-and returns the evaluated required, granted, and missing scopes and roles.
-
-### Command-Line Checks
-
-The CLI remains useful for scripting and CI. The guided scenario reads the
-non-secret Entra IDs created during configuration, opens the Microsoft sign-in
-page, copies the device code to the Windows clipboard, and uses one token for
-the role-derived path:
+Run these from the repository root with `UV_PROJECT_ENVIRONMENT` exported:
 
 ```bash
-~/.venvs/nemo-agents/bin/python scripts/test_client.py \
-	--access reader \
-	--scenario authorization
-```
-
-Use `--access operator` with the Operator test account to run its mutation path.
-Each invocation requires only the account being demonstrated.
-
-For exploratory testing, omit `--prompt` to keep one authenticated session
-open. Enter `/quit` to exit:
-
-```bash
-~/.venvs/nemo-agents/bin/python scripts/test_client.py --access reader
-```
-
-One-shot calls remain available for scripting.
-
-Reader access can list tasks but cannot execute them:
-
-```bash
-~/.venvs/nemo-agents/bin/python scripts/test_client.py \
-	--access reader \
-	--prompt "List the pending tasks."
-```
-
-Operator access can execute a task:
-
-```bash
-~/.venvs/nemo-agents/bin/python scripts/test_client.py \
-	--access operator \
-	--prompt "Execute task-1."
-```
-
-The test client prints a Microsoft device-login URL and code. It never prints
-or persists the access token. Pass `--no-browser` when automatic browser and
-clipboard integration is not wanted.
-
-## Test Locally
-
-Run authorization tests and validate the complete workflow without calling the
-model:
-
-```bash
-~/.venvs/nemo-agents/bin/pytest -q
-~/.venvs/nemo-agents/bin/python scripts/validate-agent-config.py
+"$UV_PROJECT_ENVIRONMENT/bin/python" -m pytest -q
+"$UV_PROJECT_ENVIRONMENT/bin/python" scripts/validate-agent-config.py
 bash infra/test-all-local.sh
 ```
 
-The solution-level infrastructure gate compiles and policy-checks the APIM,
-network, budget, identity, Container Apps, Entra audience, and worker templates.
-It makes no Azure calls. `nat validate` is interactive in the pinned toolkit
-version, so the checked-in Python validator is the automation-safe config gate.
+- `pytest` and `validate-agent-config.py` are local checks; the latter uses
+  placeholder credentials and makes no network calls.
+- `infra/test-all-local.sh` compiles and policy-checks infrastructure templates
+  without querying or changing Azure state.
+- The live console/client exercises Entra, APIM/Key Vault, and model calls.
+- `infra/deploy-gateway.sh --what-if` makes read-only Azure validation/preview
+  requests; `--apply` is mutating and has the explicit acknowledgement above.
 
-## Current Limits
+## Troubleshooting
 
-- The task store is in memory and is for authorization testing only.
-- APIM currently has one OpenAI backend; additional model backends and failover
-	can be added to turn it into a multi-provider router.
-- The APIM Consumption tier does not provide per-caller rate limiting in this
-	demo.
-- Scope-based tool hiding is not implemented. Every tool still enforces its
-	scope and app role at execution time, which is the authoritative boundary.
-- Access tokens older than 15 minutes are rejected to bound role-revocation
-	latency. Continuous Access Evaluation is not implemented for this custom API.
-- Authorization decisions are emitted as structured pseudonymous logs. A
-	production deployment must route them to a durable, access-controlled audit
-	sink.
-- Raw NeMo Agent Toolkit workflow failures use HTTP `422`. LearningNeMo disables
-	model narration of tool errors and maps expected policy denials to structured
-	HTTP `403` responses.
-- Replace WSL with a Linux container deployment before production.
+| Symptom | What to check |
+| --- | --- |
+| Missing `.nemo-test-client.json` or an Entra ID | Complete `configure-entra.sh --apply`; it writes the non-secret settings file. |
+| “signed in to a different tenant” or subscription mismatch | Run `az login`, export the intended IDs, and compare `az account show` to them before applying. |
+| `nat`, `pytest`, or `learningnemo` is not found | Re-export `UV_PROJECT_ENVIRONMENT`; set `NAT_BIN="$UV_PROJECT_ENVIRONMENT/bin/nat"` for the API; rerun `uv sync --frozen` if needed. |
+| Gateway settings or Key Vault lookup fail | Check Azure CLI access to the intended resources and complete/review the gateway setup. Do not replace the fail-closed gateway with a direct provider key. |
+| Reader gets HTTP 403 for a mutation | This is expected. Verify the task state remains unchanged, then sign in with the separately assigned Operator account for execution. |
 
-## Credential Rotation
+## Stop, cleanup, and architecture notes
 
-LearningNeMo no longer uses an application client secret, and local `.env`
-files are not part of the runtime. If an OpenAI provider key has ever been
-shared outside Key Vault, rotate it in the OpenAI dashboard and rerun
-`infra/deploy-gateway.sh`; the repository cannot create or revoke provider keys.
+Use `Ctrl-C` in each terminal to stop the local API and console. This does
+**not** delete or deallocate cloud resources and does not stop billing. Before
+any cloud cleanup, use the scoped preview/apply procedures in the
+[build and reproduction guide](docs/build-and-reproduce.md#5-evidence-failure-handling-and-cleanup)
+and the [cloud demo guide](docs/cloud-demo.md).
 
-PII masking uses Presidio and spaCy locally for `PERSON`, `EMAIL_ADDRESS`, and
-`PHONE_NUMBER`. A strict NAT middleware sends only the sanitized user text to
-the dedicated APIM operation. It accepts exactly `No` as safe, blocks on `Yes`,
-and stops the workflow on unrecognized verdicts or transport failures.
-Guardrails remain defense in depth; Entra, tool schemas, app roles, approval,
-and runtime containment remain authoritative.
+| Capability | Required delegated scope | Required app role |
+| --- | --- | --- |
+| Invoke agent / read time | `agent.invoke` | `Task.Reader` |
+| List tasks | `tasks.read` | `Task.Reader` |
+| Execute or reset demo tasks | `tasks.execute` | `Task.Operator` |
+
+Every tool requires both its scope **and** role. The public client has no client
+secret. Local PII masking runs before the APIM semantic guardrail; unrecognized
+guardrail verdicts and transport failures stop the workflow. Task state is
+in-memory and intended only for this authorization demonstration.
+
+The source and deeper operational material remain available:
+
+- [Source tour](src/task_agent/README.md)
+- [Build and reproduction guide](docs/build-and-reproduce.md)
+- [Capability demonstration runbook](docs/capability-demo.md)
+- [Cloud demo guide](docs/cloud-demo.md)
+- [Approver account guide](docs/approver-account.md)
+- [Human handoff checkpoint](docs/human-handoff-live-checkpoint.md)
+- [Next-phase SAW/OpenShell specification](docs/next-phase-saw-openshell-spec.md)
+- [SAW/OpenShell diagnostic record](docs/openshell-bootstrap-diagnostic-record.md)
+
+Historical SAW/OpenShell evidence is not current cloud health. The recorded
+probes do not establish a complete live end-to-end incident integration:
+approved runtime connectivity, clean-host reproducibility, and the full
+sandbox-to-incident flow remain unfinished. See the linked guides for the
+current boundaries and acceptance criteria.
