@@ -1,0 +1,63 @@
+SET XACT_ABORT ON;
+GO
+
+IF DATABASE_PRINCIPAL_ID(N'__CONTROL_PRINCIPAL__') IS NULL
+    EXEC(N'CREATE USER [__CONTROL_PRINCIPAL__] WITH SID = __CONTROL_SID_HEX__, TYPE = E;');
+IF DATABASE_PRINCIPAL_ID(N'__DIAGNOSTIC_PRINCIPAL__') IS NULL
+    EXEC(N'CREATE USER [__DIAGNOSTIC_PRINCIPAL__] WITH SID = __DIAGNOSTIC_SID_HEX__, TYPE = E;');
+IF DATABASE_PRINCIPAL_ID(N'__REMEDIATION_PRINCIPAL__') IS NULL
+    EXEC(N'CREATE USER [__REMEDIATION_PRINCIPAL__] WITH SID = __REMEDIATION_SID_HEX__, TYPE = E;');
+IF DATABASE_PRINCIPAL_ID(N'__VERIFIER_PRINCIPAL__') IS NULL
+    EXEC(N'CREATE USER [__VERIFIER_PRINCIPAL__] WITH SID = __VERIFIER_SID_HEX__, TYPE = E;');
+IF DATABASE_PRINCIPAL_ID(N'__QUERY_RUNNER_PRINCIPAL__') IS NULL
+    EXEC(N'CREATE USER [__QUERY_RUNNER_PRINCIPAL__] WITH SID = __QUERY_RUNNER_SID_HEX__, TYPE = E;');
+EXEC(N'IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N''__CONTROL_PRINCIPAL__'' AND sid <> __CONTROL_SID_HEX__) THROW 51030, ''control_principal_sid_mismatch'', 1;');
+EXEC(N'IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N''__DIAGNOSTIC_PRINCIPAL__'' AND sid <> __DIAGNOSTIC_SID_HEX__) THROW 51031, ''diagnostic_principal_sid_mismatch'', 1;');
+EXEC(N'IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N''__REMEDIATION_PRINCIPAL__'' AND sid <> __REMEDIATION_SID_HEX__) THROW 51032, ''remediation_principal_sid_mismatch'', 1;');
+EXEC(N'IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N''__VERIFIER_PRINCIPAL__'' AND sid <> __VERIFIER_SID_HEX__) THROW 51033, ''verifier_principal_sid_mismatch'', 1;');
+EXEC(N'IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N''__QUERY_RUNNER_PRINCIPAL__'' AND sid <> __QUERY_RUNNER_SID_HEX__) THROW 51034, ''query_runner_principal_sid_mismatch'', 1;');
+GO
+
+IF DATABASE_PRINCIPAL_ID(N'learningnemo_control') IS NULL CREATE ROLE learningnemo_control AUTHORIZATION dbo;
+IF DATABASE_PRINCIPAL_ID(N'learningnemo_diagnostic') IS NULL CREATE ROLE learningnemo_diagnostic AUTHORIZATION dbo;
+IF DATABASE_PRINCIPAL_ID(N'learningnemo_remediator') IS NULL CREATE ROLE learningnemo_remediator AUTHORIZATION dbo;
+IF DATABASE_PRINCIPAL_ID(N'learningnemo_verifier') IS NULL CREATE ROLE learningnemo_verifier AUTHORIZATION dbo;
+IF DATABASE_PRINCIPAL_ID(N'learningnemo_query_runner') IS NULL CREATE ROLE learningnemo_query_runner AUTHORIZATION dbo;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.database_role_members WHERE role_principal_id = DATABASE_PRINCIPAL_ID(N'learningnemo_control') AND member_principal_id = DATABASE_PRINCIPAL_ID(N'__CONTROL_PRINCIPAL__'))
+    EXEC(N'ALTER ROLE learningnemo_control ADD MEMBER [__CONTROL_PRINCIPAL__];');
+IF NOT EXISTS (SELECT 1 FROM sys.database_role_members WHERE role_principal_id = DATABASE_PRINCIPAL_ID(N'learningnemo_diagnostic') AND member_principal_id = DATABASE_PRINCIPAL_ID(N'__DIAGNOSTIC_PRINCIPAL__'))
+    EXEC(N'ALTER ROLE learningnemo_diagnostic ADD MEMBER [__DIAGNOSTIC_PRINCIPAL__];');
+IF NOT EXISTS (SELECT 1 FROM sys.database_role_members WHERE role_principal_id = DATABASE_PRINCIPAL_ID(N'learningnemo_remediator') AND member_principal_id = DATABASE_PRINCIPAL_ID(N'__REMEDIATION_PRINCIPAL__'))
+    EXEC(N'ALTER ROLE learningnemo_remediator ADD MEMBER [__REMEDIATION_PRINCIPAL__];');
+IF NOT EXISTS (SELECT 1 FROM sys.database_role_members WHERE role_principal_id = DATABASE_PRINCIPAL_ID(N'learningnemo_verifier') AND member_principal_id = DATABASE_PRINCIPAL_ID(N'__VERIFIER_PRINCIPAL__'))
+    EXEC(N'ALTER ROLE learningnemo_verifier ADD MEMBER [__VERIFIER_PRINCIPAL__];');
+IF NOT EXISTS (SELECT 1 FROM sys.database_role_members WHERE role_principal_id = DATABASE_PRINCIPAL_ID(N'learningnemo_query_runner') AND member_principal_id = DATABASE_PRINCIPAL_ID(N'__QUERY_RUNNER_PRINCIPAL__'))
+    EXEC(N'ALTER ROLE learningnemo_query_runner ADD MEMBER [__QUERY_RUNNER_PRINCIPAL__];');
+GO
+
+GRANT EXECUTE ON OBJECT::control.usp_issue_approval TO learningnemo_control;
+GRANT EXECUTE ON OBJECT::ops.usp_expire_query_leases TO learningnemo_control;
+GRANT EXECUTE ON OBJECT::ops.usp_get_diagnostic_snapshot TO learningnemo_diagnostic;
+GRANT EXECUTE ON OBJECT::ops.usp_activate_cycle_safe_query TO learningnemo_remediator;
+GRANT EXECUTE ON OBJECT::ops.usp_verify_cycle_recovery TO learningnemo_verifier;
+GRANT EXECUTE ON OBJECT::ops.usp_run_cycle_safe_query TO learningnemo_verifier;
+GRANT EXECUTE ON OBJECT::ops.usp_register_query_run TO learningnemo_query_runner;
+GRANT EXECUTE ON OBJECT::ops.usp_mark_query_running TO learningnemo_query_runner;
+GRANT EXECUTE ON OBJECT::ops.usp_request_owned_query_cancel TO learningnemo_query_runner;
+GRANT EXECUTE ON OBJECT::ops.usp_confirm_owned_query_cancelled TO learningnemo_query_runner;
+GRANT EXECUTE ON OBJECT::ops.usp_mark_query_failed TO learningnemo_query_runner;
+GRANT EXECUTE ON OBJECT::ops.usp_run_controlled_unsafe_query TO learningnemo_query_runner;
+GO
+
+DENY SELECT, INSERT, UPDATE, DELETE ON SCHEMA::control TO learningnemo_diagnostic;
+DENY SELECT, INSERT, UPDATE, DELETE ON SCHEMA::control TO learningnemo_remediator;
+DENY SELECT, INSERT, UPDATE, DELETE ON SCHEMA::control TO learningnemo_verifier;
+DENY SELECT, INSERT, UPDATE, DELETE ON SCHEMA::control TO learningnemo_query_runner;
+DENY SELECT, INSERT, UPDATE, DELETE ON SCHEMA::lab TO learningnemo_control;
+DENY SELECT, INSERT, UPDATE, DELETE ON SCHEMA::lab TO learningnemo_diagnostic;
+DENY SELECT, INSERT, UPDATE, DELETE ON SCHEMA::lab TO learningnemo_remediator;
+DENY SELECT, INSERT, UPDATE, DELETE ON SCHEMA::lab TO learningnemo_verifier;
+DENY SELECT, INSERT, UPDATE, DELETE ON SCHEMA::lab TO learningnemo_query_runner;
+GO

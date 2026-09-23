@@ -1,0 +1,28 @@
+<policies>
+  <inbound>
+    <base />
+    <set-body>@{
+      var body = context.Request.Body.As&lt;Newtonsoft.Json.Linq.JObject&gt;(preserveContent: true);
+      body["model"] = "gpt-4o-mini";
+      body["temperature"] = 0;
+      body.Remove("max_completion_tokens");
+      body["max_tokens"] = 3;
+      body["stream"] = false;
+      body.Remove("tools");
+      body.Remove("tool_choice");
+      body.Remove("functions");
+      body.Remove("function_call");
+      return body.ToString(Newtonsoft.Json.Formatting.None);
+    }</set-body>
+    <rewrite-uri template="/chat/completions" copy-unmatched-params="true" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

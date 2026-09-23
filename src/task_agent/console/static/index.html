@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LearningNeMo | Secured Agent Lab</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+    <link rel="stylesheet" href="/assets/showcase.css">
+    <link rel="stylesheet" href="/assets/pattern.css">
+    <link rel="stylesheet" href="/assets/session.css">
+    <link rel="stylesheet" href="/assets/mission.css">
+    <link rel="stylesheet" href="/assets/invoice.css">
+    <link rel="stylesheet" href="/assets/openai-theme.css">
+    <script src="/assets/vendor/lucide.min.js" defer></script>
+    <script src="/assets/learningnemo.js" defer></script>
+    <script src="/assets/showcase.js" defer></script>
+    <script src="/assets/workspace-observation.js" defer></script>
+    <script src="/assets/live-workspace.js" defer></script>
+    <script src="/assets/pattern.js" defer></script>
+    <script src="/assets/approvals.js" defer></script>
+    <script src="/assets/session.js" defer></script>
+    <script src="/assets/incidents.js" defer></script>
+    <script src="/assets/executions.js" defer></script>
+    <script src="/assets/incident-flow.js" defer></script>
+    <script src="/assets/workflow.js" defer></script>
+    <script src="/assets/invoice-view.js" defer></script>
+    <script src="/assets/invoice-scene.js" defer></script>
+    <script src="/assets/invoice-evidence.js" defer></script>
+    <script src="/assets/invoice-experience.js" defer></script>
+    <script src="/assets/invoice-scroll.js" defer></script>
+    <script src="/assets/invoice-workflow.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true"><i data-lucide="scan-line"></i></span>
+          <div>
+            <strong>LearningNeMo</strong>
+            <span>Governed agent execution</span>
+          </div>
+        </div>
+
+        <div class="agent-connection" aria-live="polite">
+          <span id="agentStatusDot" class="status-dot status-neutral"></span>
+          <div>
+            <span id="agentStatusLabel">Checking local agent</span>
+            <code id="agentEndpoint">127.0.0.1:8001</code>
+          </div>
+          <button id="refreshButton" class="icon-button" type="button" title="Refresh connection">
+            <i data-lucide="refresh-cw"></i>
+            <span class="sr-only">Refresh connection</span>
+          </button>
+        </div>
+      </header>
+
+      <nav class="demo-nav" role="tablist" aria-label="Demonstration views" hidden>
+        <button id="patternViewTab" class="demo-nav-tab" role="tab" aria-selected="true" aria-controls="patternWorkspace" type="button"><i data-lucide="network"></i>The pattern</button>
+        <button id="liveViewTab" class="demo-nav-tab" role="tab" aria-selected="false" aria-controls="liveWorkspace" tabindex="-1" type="button"><i data-lucide="activity"></i>Live proof</button>
+        <button id="workspaceViewTab" class="demo-nav-tab" role="tab" aria-selected="false" aria-controls="showcaseWorkspace" tabindex="-1" type="button"><i data-lucide="history"></i>Recorded evidence</button>
+        <button id="identityViewTab" class="demo-nav-tab" role="tab" aria-selected="false" aria-controls="identityWorkspace" tabindex="-1" type="button"><i data-lucide="badge-check"></i>Demo session</button>
+        <button id="buildViewTab" class="demo-nav-tab" role="tab" aria-selected="false" aria-controls="buildWorkspace" tabindex="-1" type="button"><i data-lucide="fingerprint"></i>Build &amp; decisions</button>
+        <span class="demo-location"><i data-lucide="monitor"></i>Local console <span aria-hidden="true">/</span> Azure workspace</span>
+      </nav>
+
+      <section class="session-bar" aria-label="Current account and next action">
+        <span id="sessionRoleIcon" class="session-role-icon"><i data-lucide="user-round"></i></span>
+        <div class="session-account"><span class="session-label">CURRENT ACCOUNT</span><strong id="sessionRoleName">Signed out</strong><span id="sessionAccountProof">No role selected</span></div>
+        <div class="session-next"><span class="session-label">NEXT ACTION</span><span id="sessionNextAction" role="status" aria-live="polite">Sign in with your assigned demo account.</span></div>
+        <div class="session-actions"><button id="sessionSignIn" type="button" class="button button-primary"><i data-lucide="log-in"></i>Sign in</button><button id="sessionOpen" type="button" class="button button-secondary" hidden><i data-lucide="list-checks"></i>My session</button><button id="sessionSwitch" type="button" class="button button-secondary" hidden><i data-lucide="users-round"></i><span>Switch account</span></button><button id="sessionSignOut" type="button" class="icon-button" title="Sign out of the demo" hidden><i data-lucide="log-out"></i><span class="sr-only">Sign out of the demo</span></button></div>
+      </section>
+
+      <main id="missionWorkspace" class="mission" aria-labelledby="missionTitle">
+        <header class="mission-heading">
+          <div><p class="mission-eyebrow">LEARNINGNEMO / GOVERNED DATABASE OPERATIONS</p><h1 id="missionTitle">Database incident</h1><p>Read-only analysis. Independent approval. Verified change.</p></div>
+          <button id="missionEvidenceOpen" class="button button-secondary" type="button"><i data-lucide="shield-check"></i>Security evidence</button>
+        </header>
+        <div class="mission-context"><span><i data-lucide="database"></i>Azure SQL latency investigation</span><strong id="missionRunState">Incident not started</strong><span id="missionEvidenceKind">No live receipt</span></div>
+        <div id="missionRail" class="mission-rail" role="tablist" aria-label="Incident sequence"></div>
+        <div class="mission-layout">
+          <section class="mission-active" id="missionStepPanel" role="tabpanel" aria-labelledby="mission-step-0">
+            <div class="mission-step-heading"><span id="missionStepNumber">01 / 06</span><span id="missionStepState">Awaiting sign-in</span></div>
+            <h2 id="missionStepTitle">A human sponsors the work</h2>
+            <p id="missionStepDescription" class="mission-description">A verified identity establishes who requested the investigation and what they may authorize.</p>
+            <div class="mission-boundary" aria-label="Execution boundaries">
+              <div class="mission-human" data-mission-node="human"><i data-lucide="user-round-check"></i><span><strong>Human sponsor</strong><small>Entra identity</small></span></div>
+              <div class="mission-transfer" aria-hidden="true"><i data-lucide="arrow-down"></i></div>
+              <div class="mission-saw" data-mission-node="saw"><div class="mission-saw-label"><i data-lucide="server"></i><strong>SAW</strong><span>Private Azure host</span></div>
+                <div class="mission-gateway" data-mission-node="gateway"><i data-lucide="shield-check"></i><strong>OpenShell</strong><span>mTLS / filesystem / process / network policy</span></div>
+                <div class="mission-processes"><div data-mission-node="planning"><i data-lucide="scan-search"></i><strong>Planning</strong><small>Diagnostic reads</small></div><div data-mission-node="execution"><i data-lucide="workflow"></i><strong>Execution</strong><small>Approved broker route</small></div><div data-mission-node="probe"><i data-lucide="shield-ban"></i><strong>Probe</strong><small>Forbidden requests</small></div></div>
+              </div>
+              <div class="mission-transfer" aria-hidden="true"><i data-lucide="arrow-down"></i></div>
+              <div class="mission-trusted" data-mission-node="trusted"><i data-lucide="lock-keyhole"></i><span><strong>Trusted control plane</strong><small>Approval / broker / independent verifier</small></span><span class="mission-outside">Outside agent authority</span></div>
+            </div>
+            <div class="mission-decision"><span>BOUNDARY IN FOCUS</span><p id="missionBoundaryText">Identity establishes authority. It does not grant the agent unrestricted access.</p></div>
+            <div class="mission-command"><button id="missionAction" type="button" class="button button-primary" aria-describedby="missionActionStatus"><i data-lucide="log-in"></i><span>Sign in to begin</span></button></div>
+            <p id="missionActionStatus" class="mission-action-status" role="status" aria-live="polite">No request has been sent.</p>
+            <section id="missionAgentCheck" class="mission-agent-check" hidden><div><strong>Agent connection check</strong><p>Read-only task query / separate from the SQL incident</p></div><button id="missionAgentRun" type="button" class="button button-secondary"><i data-lucide="radio"></i>Query task agent</button><pre id="missionAgentResult" role="status">No agent request sent.</pre></section>
+            <div id="missionTools" class="mission-tools"></div>
+          </section>
+          <aside class="mission-evidence" aria-labelledby="missionEvidenceTitle"><div class="mission-evidence-title"><i data-lucide="receipt-text"></i><h2 id="missionEvidenceTitle">What actually happened</h2></div><dl id="missionFacts"></dl><div class="mission-verdict" id="missionVerdict">Awaiting a live observation</div><p id="missionClaim">Selecting a step does not execute it or establish a result.</p><details><summary>Request receipt</summary><pre id="missionReceipt">No receipt for this session.</pre></details></aside>
+        </div>
+        <footer class="mission-footer"><span><i data-lucide="hard-drive"></i>Resources retained for your test</span><span>Short-lived credentials / independently enforced permissions</span></footer>
+      </main>
+      <dialog id="missionEvidenceDrawer" class="mission-drawer" aria-labelledby="missionDrawerTitle"><header><h2 id="missionDrawerTitle">Security evidence</h2><button id="missionEvidenceClose" type="button" class="icon-button" title="Close security evidence"><i data-lucide="x"></i><span class="sr-only">Close security evidence</span></button></header><label for="missionEvidenceSource">Evidence source</label><select id="missionEvidenceSource"><option value="liveWorkspace">Planning sandbox / isolation check</option><option value="missionAgentCheck">Task-agent diagnostic</option><option value="patternWorkspace">Architecture</option><option value="showcaseWorkspace">Historical evidence</option><option value="buildWorkspace">Build decisions</option></select><div id="missionDrawerBody"></div></dialog>
+
+      <main id="patternWorkspace" class="pattern-page" role="tabpanel" aria-labelledby="patternViewTab" hidden>
+        <header class="pattern-intro">
+          <div><p class="pattern-eyebrow">LEARNINGNEMO / AGENT SECURITY PATTERN</p><h1>Intelligence proposes.<br>Authority decides.</h1><p class="pattern-premise">Resolve an Azure SQL incident without making the agent an administrator.</p></div>
+          <div class="pattern-contract"><span class="pattern-tag">Architecture / target workflow</span><p>A human sponsors the task. The agent investigates inside a constrained workspace. Trusted services decide whether a proposed change may execute.</p><span class="pattern-caveat">Connected incident journey: not yet verified</span></div>
+        </header>
+
+        <section class="pattern-map-section" aria-labelledby="patternMapTitle">
+          <div class="pattern-section-heading"><div><p class="pattern-eyebrow">ONE INCIDENT. FIVE TRUST BOUNDARIES.</p><h2 id="patternMapTitle">Authority narrows at every handoff</h2></div><span class="pattern-map-key"><span class="pattern-solid-key"></span>Implemented component <span class="pattern-dashed-key"></span>Integration pending</span></div>
+          <div class="pattern-map" role="tablist" aria-label="Trust boundaries">
+            <button id="boundary-identity" type="button" role="tab" aria-selected="true" aria-controls="patternBoundaryDetail" class="pattern-node pattern-human"><span class="pattern-node-number">01 / WHO</span><i data-lucide="badge-check"></i><strong>Human identity</strong><span>Reader · Operator · Approver</span><small>Entra scopes + app roles</small></button>
+            <span class="pattern-handoff" aria-hidden="true"><i data-lucide="arrow-right"></i></span>
+            <button id="boundary-agent" type="button" role="tab" aria-selected="false" aria-controls="patternBoundaryDetail" tabindex="-1" class="pattern-node pattern-pending"><span class="pattern-node-number">02 / ON WHOSE BEHALF</span><i data-lucide="bot"></i><strong>Agent identity</strong><span>Task-bound AgentRunner</span><small>Delegation integration pending</small></button>
+            <span class="pattern-handoff" aria-hidden="true"><i data-lucide="arrow-right"></i></span>
+            <button id="boundary-workspace" type="button" role="tab" aria-selected="false" aria-controls="patternBoundaryDetail" tabindex="-1" class="pattern-node pattern-workspace"><span class="pattern-node-number">03 / WHERE &amp; HOW</span><i data-lucide="boxes"></i><strong>SAW + OpenShell</strong><span>Private host → constrained process</span><small>Planning · Execution · Probe</small></button>
+            <span class="pattern-handoff" aria-hidden="true"><i data-lucide="arrow-right"></i></span>
+            <button id="boundary-approval" type="button" role="tab" aria-selected="false" aria-controls="patternBoundaryDetail" tabindex="-1" class="pattern-node pattern-pending"><span class="pattern-node-number">04 / WHO AUTHORIZES</span><i data-lucide="file-check-2"></i><strong>Approval + broker</strong><span>Exact plan, bounded operation</span><small>Browser journey pending</small></button>
+            <span class="pattern-handoff" aria-hidden="true"><i data-lucide="arrow-right"></i></span>
+            <button id="boundary-azure" type="button" role="tab" aria-selected="false" aria-controls="patternBoundaryDetail" tabindex="-1" class="pattern-node pattern-azure"><span class="pattern-node-number">05 / WHAT CHANGED</span><i data-lucide="database"></i><strong>Azure resources</strong><span>Dedicated workload identities</span><small>SQL result + verification</small></button>
+          </div>
+          <p class="pattern-map-caption">Arrows describe the intended authority flow, not a trace of a completed run. Reader/Operator tools, sandbox probes, and the SQL control cycle have separate evidence.</p>
+          <article id="patternBoundaryDetail" class="pattern-boundary-detail" role="tabpanel" aria-labelledby="boundary-identity" aria-live="polite"></article>
+        </section>
+
+        <section class="pattern-isolation" aria-labelledby="patternIsolationTitle">
+          <div class="pattern-isolation-copy"><p class="pattern-eyebrow">WHY BOTH SAW AND OPENSHELL?</p><h2 id="patternIsolationTitle">An identity is not<br>an isolation boundary.</h2><p>Authentication establishes the caller. It does not contain a script, restrict an outbound connection, or stop a process from reading a file.</p><dl><div><dt>SAW</dt><dd>The outer engagement boundary: a private Azure VM and a managed lifetime.</dd></div><div><dt>OpenShell</dt><dd>The inner execution boundary: non-root MicroVM processes and narrow filesystem/network policies.</dd></div><div><dt>Guardrails</dt><dd>Inspect inputs before model/tool use. Content screening complements, but cannot replace, permissions and isolation.</dd></div></dl></div>
+          <div class="pattern-containment" aria-label="Configured workspace containment">
+            <div class="pattern-enclosure"><div class="pattern-enclosure-title"><i data-lucide="server"></i><strong>Secure Agent Workspace</strong><span>Azure private VM</span></div><div class="pattern-policy-line"><i data-lucide="network"></i>OpenShell gateway <span>mTLS · policy enforcement</span></div><div class="pattern-processes"><div><i data-lucide="scan-search"></i><strong>Planning</strong><span>Read diagnostics</span><code>GET /diagnostics</code></div><div><i data-lucide="workflow"></i><strong>Execution</strong><span>Broker route only</span><code>POST /execute</code></div><div><i data-lucide="shield-check"></i><strong>Probe</strong><span>Test the boundary</span><code>No network allow</code></div></div><p>Configured route labels are abbreviated. Exact methods and paths are in the policy evidence.</p></div>
+            <div class="pattern-outside"><i data-lucide="lock-keyhole"></i><span><strong>Outside the agent's authority</strong>Human approval, SQL credentials, Azure role grants, workspace lifecycle.</span></div>
+          </div>
+        </section>
+
+        <section class="pattern-personas" aria-labelledby="patternPersonaTitle">
+          <div class="pattern-section-heading"><div><p class="pattern-eyebrow">SAME INCIDENT. DIFFERENT AUTHORITY.</p><h2 id="patternPersonaTitle">Who is allowed to do what?</h2></div><span class="pattern-tag">Target permission design / not your signed-in role</span></div>
+          <div id="patternPersonaTabs" class="pattern-persona-tabs" role="tablist" aria-label="Persona design"></div>
+          <div id="patternPersonaDetail" class="pattern-persona-detail" role="tabpanel" aria-live="polite"></div>
+        </section>
+
+        <section class="pattern-prove" aria-labelledby="patternProveTitle">
+          <div class="pattern-section-heading"><div><p class="pattern-eyebrow">FROM ARCHITECTURE TO PROOF</p><h2 id="patternProveTitle">A claim needs an observable result.</h2></div></div>
+          <div class="pattern-proof-options">
+            <button type="button" class="pattern-proof-link" data-pattern-view="liveViewTab"><span class="pattern-proof-type">LIVE / REQUIRES SIGN-IN</span><i data-lucide="activity"></i><strong>Check the workspace</strong><span>Query current Azure state. Run the fixed Planning probe only when identity and lease checks permit it.</span><span class="pattern-proof-go">Open live proof <i data-lucide="arrow-right"></i></span></button>
+            <button type="button" class="pattern-proof-link" data-pattern-view="identityViewTab"><span class="pattern-proof-type">LIVE / SEPARATE TASK DEMO</span><i data-lucide="key-round"></i><strong>Test tool authorization</strong><span>Use the actual signed-in Reader or Operator. Compare a permission decision with task state.</span><span class="pattern-proof-go">Open Demo session <i data-lucide="arrow-right"></i></span></button>
+            <button type="button" class="pattern-proof-link" data-pattern-view="workspaceViewTab"><span class="pattern-proof-type">RECORDED / 14 SEP 2026</span><i data-lucide="history"></i><strong>Inspect sandbox evidence</strong><span>Compare protected-route reachability with wrong-method denial. Historical summaries do not execute commands.</span><span class="pattern-proof-go">Open recorded evidence <i data-lucide="arrow-right"></i></span></button>
+          </div>
+          <div class="pattern-readiness"><i data-lucide="git-pull-request"></i><div><strong>The complete pattern is the destination, not the current acceptance claim.</strong><p>The dashboard, private controller, and task API are cloud-hosted. Task request verification, approved SAW egress, AgentRunner delegation, and the connected approval/SQL journey still have open gates. Current availability belongs in Live proof.</p></div></div>
+        </section>
+      </main>
+
+      <main id="liveWorkspace" class="demo-page" role="tabpanel" aria-labelledby="liveViewTab" hidden>
+        <header class="demo-heading"><div><p class="demo-kicker" id="liveEyebrow">WORKSPACE / STATUS AND PROOF</p><h1 id="liveTitle">Live workspace proof</h1><p class="demo-lede" id="liveSummary">Check current workspace state or request a fixed execution proof.</p></div><span class="demo-badge" id="liveMode">Checking transport configuration</span></header>
+        <div class="live-scope" id="liveScope"><i data-lucide="info"></i><p>Fixed sandbox proof, not the full SQL incident demo. No model call or SQL remediation. Azure commands use the local operator's credentials; your Entra token stays in the console.</p></div>
+        <div class="live-actions">
+          <div><span class="demo-field-label">Current browser identity</span><strong id="liveIdentity">Not signed in</strong><span id="liveAccess" class="live-detail">Execution requires verified tasks.execute and Task.Operator.</span></div>
+          <button id="liveSignIn" class="button button-secondary" type="button"><i data-lucide="log-in"></i>Sign in</button>
+          <button id="liveCheck" class="button button-secondary" type="button" disabled><i data-lucide="refresh-cw"></i>Check cloud status</button>
+          <button id="liveRun" class="button button-primary" type="button" disabled><i data-lucide="play"></i>Run workspace proof</button>
+          <button id="liveReviewStatus" class="button button-secondary" type="button" hidden><i data-lucide="file-check-2"></i>Review service status</button>
+        </div>
+        <p id="liveOperation" class="live-operation" role="status" aria-live="polite">No cloud query or workspace command has run from this page.</p>
+        <section id="liveObservedState" aria-labelledby="liveStateHeading"><div class="demo-section-title"><div><p class="demo-kicker">OBSERVED STATE</p><h2 id="liveStateHeading">What is running now?</h2></div><span id="liveCheckedAt" class="demo-badge">Not checked</span></div>
+          <div class="demo-build-table"><table><thead><tr><th>Component</th><th>Observation</th><th>Source</th></tr></thead><tbody id="liveComponents"></tbody></table></div>
+          <p id="liveLease" class="live-detail">Workspace lease: not checked</p>
+        </section>
+        <section id="liveRunResults" aria-labelledby="liveRunHeading"><div class="demo-section-title"><div><p class="demo-kicker">THIS REQUEST ONLY</p><h2 id="liveRunHeading">Identity → authorization → execution</h2></div><button id="liveExport" class="button button-secondary" type="button" disabled><i data-lucide="download"></i>Export run receipt</button></div>
+          <ol id="liveSteps" class="live-steps"></ol>
+          <pre id="liveReceipt" class="live-receipt" hidden></pre>
+        </section>
+      </main>
+
+      <main id="showcaseWorkspace" class="demo-page" role="tabpanel" aria-labelledby="workspaceViewTab" hidden>
+        <header class="demo-heading">
+          <div><p class="demo-kicker">HISTORICAL RESULTS / NOT A LIVE RUN</p><h1>Recorded workspace evidence</h1><p class="demo-lede">Selecting a sandbox below reads a saved summary. It does not execute a command.</p></div>
+          <div class="demo-provenance"><span class="demo-badge" id="demoSource">Loading record</span><time id="demoDate"></time><span>Current cloud health: unknown</span></div>
+        </header>
+        <div id="demoLoading" class="demo-loading" role="status"><span class="spinner"></span>Loading engineering record</div>
+        <div id="demoError" class="demo-error" role="alert" hidden><i data-lucide="circle-alert"></i><span>Engineering record unavailable.</span><button id="demoRetry" type="button" class="button button-secondary">Retry</button></div>
+        <div id="demoContent" hidden>
+          <div id="demoMilestones" class="demo-milestones" aria-label="Recorded deployment results"></div>
+          <section class="demo-boundaries" aria-labelledby="sandboxTitle">
+            <div class="demo-section-title"><div><p class="demo-kicker">PROCESS AUTHORITY</p><h2 id="sandboxTitle">Three sandboxes. Three different jobs.</h2></div><span class="demo-badge">Recorded policy probes</span></div>
+            <div class="demo-explorer">
+              <div class="demo-topology">
+                <div class="demo-host-label"><span><i data-lucide="server"></i>Azure Secure Agent Workspace</span><span class="demo-quiet">Private host</span></div>
+                <div class="demo-gateway"><span class="demo-gateway-icon"><i data-lucide="network"></i></span><div><strong>OpenShell gateway</strong><span>mTLS authentication <span aria-hidden="true">/</span> MicroVM isolation</span></div><span class="demo-badge">0.0.116</span></div>
+                <div class="demo-connectors" aria-hidden="true"><span></span><span></span><span></span></div>
+                <div id="demoSandboxes" class="demo-sandboxes" role="tablist" aria-label="Sandbox policy"></div>
+                <div class="demo-host-footer"><i data-lucide="lock-keyhole"></i><span>Non-root processes <span aria-hidden="true">/</span> Distinct method-and-path policies</span></div>
+                <div id="demoRationale" class="demo-rationale"></div>
+              </div>
+              <div class="demo-inspector" id="demoInspector" role="tabpanel">
+                <div class="demo-inspector-title"><span><i data-lucide="scan-line"></i>Policy evidence</span><span class="demo-badge">Recorded summary</span></div>
+                <div id="demoPolicy" class="demo-policy"></div>
+                <div id="demoChecks" class="demo-checks" aria-label="Recorded requests"></div>
+                <div id="demoResult" class="demo-result" aria-live="polite"></div>
+                <button id="demoExport" type="button" class="button button-secondary demo-export"><i data-lucide="download"></i>Export selected evidence</button>
+              </div>
+            </div>
+          </section>
+          <section class="demo-journey" aria-labelledby="journeyTitle">
+            <div class="demo-section-title"><div><p class="demo-kicker">THE SECURITY STORY</p><h2 id="journeyTitle">From isolation to accountable execution</h2></div><div class="demo-step-controls"><span id="demoStepCount"></span><button id="demoPrevious" type="button" class="icon-button" title="Previous boundary"><i data-lucide="arrow-left"></i><span class="sr-only">Previous boundary</span></button><button id="demoNext" type="button" class="icon-button" title="Next boundary"><i data-lucide="arrow-right"></i><span class="sr-only">Next boundary</span></button></div></div>
+            <div id="demoJourney" class="demo-journey-steps" role="tablist" aria-label="Security boundaries"></div>
+            <div id="demoStage" class="demo-stage" role="tabpanel" aria-live="polite"></div>
+          </section>
+          <div class="demo-qualification"><i data-lucide="info"></i><p id="demoQualification"></p></div>
+        </div>
+      </main>
+
+      <main id="buildWorkspace" class="demo-page" role="tabpanel" aria-labelledby="buildViewTab" hidden>
+        <header class="demo-heading"><div><p class="demo-kicker">ENGINEERING, NOT JUST ORCHESTRATION</p><h1>Decisions that hold the boundary</h1><p class="demo-lede">The choice, the tradeoff, and the evidence behind it.</p></div><span class="demo-badge">Design rationale</span></header>
+        <div id="buildLoading" class="demo-loading" role="status">Build record not loaded yet.</div>
+        <div id="buildContent" hidden>
+          <section class="demo-decision-layout" aria-label="Architecture decisions"><div id="demoDecisions" class="demo-decisions" role="tablist" aria-orientation="vertical" aria-label="Decision"></div><article id="demoDecision" class="demo-decision-detail" role="tabpanel" aria-live="polite"></article></section>
+          <section class="demo-build-section" aria-labelledby="buildTitle"><div class="demo-section-title"><div><p class="demo-kicker">BUILD CONTRACT</p><h2 id="buildTitle">Trace the artifact. Verify the result.</h2></div></div><div id="demoBuild" class="demo-build-table"></div></section>
+          <section aria-labelledby="documentsTitle"><div class="demo-section-title"><div><p class="demo-kicker">REVIEW MATERIAL</p><h2 id="documentsTitle">Build it. Demonstrate it. Challenge it.</h2></div></div><div id="demoDocuments" class="demo-documents"></div></section>
+        </div>
+      </main>
+
+      <section id="identityWorkspace" role="tabpanel" aria-labelledby="identityViewTab" hidden>
+      <header class="session-heading"><div><p class="demo-kicker">YOUR CURRENT SESSION</p><h1 id="sessionTitle">Choose an assigned account to begin</h1><p id="sessionPurpose">Reader tests denied changes. Operator tests permitted changes. Approver review is not connected yet.</p></div><span id="sessionMode" class="demo-badge">No action running</span></header>
+      <div class="session-permissions"><div><span class="session-label">AVAILABLE IN THIS DEMO</span><p id="sessionCan">Sign-in and architecture review.</p></div><div><span class="session-label">NOT PERMITTED / NOT AVAILABLE</span><p id="sessionCannot">No task or workspace actions before sign-in.</p></div></div>
+      <div class="session-paths" aria-label="Distinct demo roles, not sequential steps"><div data-session-role="reader"><strong>Reader</strong><span>Read → test denial → verify unchanged</span></div><div data-session-role="operator"><strong>Operator</strong><span>Reset → execute → verify changed</span></div><div data-session-role="approver"><strong>Approver</strong><span>Separate reviewer · service not connected</span></div></div>
+      <p class="session-boundary">These are separate account paths, not steps completed by one person. The task walkthrough uses demo tasks; it does not create a SQL incident or an approval request.</p>
+      <section id="approvalsWorkspace" class="demo-page" aria-labelledby="approvalServiceHeading" hidden>
+        <div class="session-approval-banner"><i data-lucide="unplug"></i><div><strong>Signed in as reviewer. There is no connected plan queue yet.</strong><p>No Operator handoff is waiting here. Approval submission is unavailable in this build.</p></div></div>
+        <div class="live-actions"><div><span class="demo-field-label">Assigned reviewer</span><strong id="approverIdentity">Not signed in</strong></div><button id="approverRefresh" class="button button-secondary" type="button" disabled><i data-lucide="refresh-cw"></i>Recheck review service</button></div>
+        <p id="approverStatus" class="live-operation" role="status" aria-live="polite">Sign in with the dedicated Approver account.</p>
+        <section aria-labelledby="approvalServiceHeading"><div class="demo-section-title"><h2 id="approvalServiceHeading">Review service status</h2><span id="approverAvailability" class="demo-badge">Not checked</span></div><p class="live-detail">A decision must bind the exact plan hash and come from a different person than its author or executor. No decision is submitted by this status check.</p></section>
+      </section>
+      <section id="incidentWorkspace" class="demo-page" aria-labelledby="incidentHeading" hidden>
+        <div class="demo-section-title"><div><p class="demo-kicker">OPERATOR / PERSISTED INVESTIGATION</p><h2 id="incidentHeading">Incident handoff</h2></div><span id="incidentAvailability" class="demo-badge">Not checked</span></div>
+        <div class="live-actions"><p class="live-detail">Submit your recorded plan for independent review. Submission does not execute remediation.</p><button id="incidentRefresh" type="button" class="button button-secondary"><i data-lucide="refresh-cw"></i>Refresh investigations</button></div>
+        <p id="incidentStatus" class="live-operation" role="status" aria-live="polite">No incident request has been sent.</p>
+        <div id="incidentPlans"></div>
+      </section>
+      <div id="taskExperience">
+      <div class="request-path" aria-label="Task agent request path">
+        <div class="path-label">Request path</div>
+        <div class="path-node active"><i data-lucide="monitor"></i><span>Console</span></div>
+        <i class="path-arrow" data-lucide="arrow-right"></i>
+        <div class="path-node"><i data-lucide="badge-check"></i><span>Entra ID</span></div>
+        <i class="path-arrow" data-lucide="arrow-right"></i>
+        <div class="path-node"><i data-lucide="shield-check"></i><span>Guardrails</span></div>
+        <i class="path-arrow" data-lucide="arrow-right"></i>
+        <div class="path-node"><i data-lucide="workflow"></i><span>NeMo Agent</span></div>
+        <i class="path-arrow" data-lucide="arrow-right"></i>
+        <div class="path-node"><i data-lucide="route"></i><span>APIM</span></div>
+        <i class="path-arrow" data-lucide="arrow-right"></i>
+        <div class="path-node"><i data-lucide="sparkles"></i><span>OpenAI</span></div>
+      </div>
+
+      <div class="workspace session-task-layout">
+        <details class="session-technical"><summary>Verified identity and token claims</summary>
+        <aside class="access-region region" aria-labelledby="accessHeading">
+          <div class="region-heading">
+            <div>
+              <span class="eyebrow">Authenticated identity</span>
+              <h1 id="accessHeading">Current user</h1>
+            </div>
+            <i data-lucide="key-round" aria-hidden="true"></i>
+          </div>
+
+          <section id="currentSession" class="role-profile current-session">
+            <div class="role-title-row">
+              <span id="currentUserIcon" class="role-icon"><i data-lucide="user-round"></i></span>
+              <div>
+                <h2 id="currentUserHeading">Not signed in</h2>
+                <span id="currentUserStatus" class="role-status"><span class="status-dot status-neutral"></span>Signed out</span>
+                <code class="account-fingerprint" hidden></code>
+              </div>
+            </div>
+            <span class="claim-label">Delegated client scopes</span>
+            <div id="currentScopeList" class="scope-list" aria-label="Granted client scopes">
+              <span class="scope scope-read">agent.invoke</span>
+              <span class="scope scope-read">tasks.read</span>
+              <span class="scope scope-execute">tasks.execute</span>
+            </div>
+            <span class="claim-label">Assigned API app roles</span>
+            <div id="currentRoleList" class="role-claim-list" aria-label="Granted API app roles">
+              <span class="empty-claim">Detected after sign-in</span>
+            </div>
+            <div class="role-actions">
+              <button id="signInButton" class="button button-secondary sign-in-button" type="button">
+                <i data-lucide="log-in"></i><span>Sign in</span>
+              </button>
+              <button id="signOutButton" class="icon-button sign-out-button" type="button" title="Clear current session" hidden>
+                <i data-lucide="log-out"></i><span class="sr-only">Clear current session</span>
+              </button>
+            </div>
+          </section>
+
+          <div class="boundary-note">
+            <i data-lucide="shield-alert"></i>
+            <p>LearningNeMo derives the walkthrough from this token's verified <code>scp</code> and <code>roles</code> claims.</p>
+          </div>
+        </aside>
+        </details>
+
+        <section class="walkthrough-region region" aria-labelledby="walkthroughHeading">
+          <div class="region-heading walkthrough-heading">
+            <div>
+              <span class="eyebrow">Live verification</span>
+              <h1 id="walkthroughHeading">Your task walkthrough</h1>
+              <p class="walkthrough-intro" id="walkthroughPurpose">No tasks execute until you start a test.</p>
+            </div>
+            <button id="runScenarioButton" class="button button-primary" type="button">
+              <i data-lucide="play"></i><span>Start role test</span>
+            </button>
+          </div>
+
+          <div class="scenario-progress" aria-live="polite">
+            <div class="progress-copy">
+              <span id="progressLabel">Ready</span>
+              <span id="progressCount">0 / —</span>
+            </div>
+            <progress id="progressBar" class="session-progress" value="0" max="100" aria-label="Task walkthrough progress"></progress>
+          </div>
+
+          <div id="scenarioPreflight" class="scenario-preflight" data-state="idle">
+            <span class="preflight-icon"><i data-lucide="scan-search"></i></span>
+            <div>
+              <strong>Claim evaluation</strong>
+              <span id="preflightDetail">Sign in to inspect delegated scopes and assigned app roles</span>
+            </div>
+            <span id="preflightVerdict">Not run</span>
+          </div>
+
+          <ol id="scenarioSteps" class="scenario-steps">
+            <li class="scenario-empty">
+              <i data-lucide="log-in"></i>
+              <span>Sign in once to generate a walkthrough from the current user's verified roles.</span>
+            </li>
+          </ol>
+        </section>
+
+        <details class="session-technical" id="sessionAdvanced"><summary>Request history, manual prompts, and system details</summary>
+        <aside class="interaction-region region" aria-labelledby="interactionHeading">
+          <div class="interaction-tabs" role="tablist" aria-label="Agent workspace views">
+            <button id="systemTab" class="tab-button active" type="button" role="tab" aria-selected="true" aria-controls="systemPanel">
+              <i data-lucide="layers-3"></i><span>System</span>
+            </button>
+            <button id="promptTab" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="promptPanel">
+              <i data-lucide="message-square"></i><span>Prompt</span>
+            </button>
+            <button id="activityTab" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="activityPanel">
+              <i data-lucide="list-filter"></i><span>Activity</span><span id="activityCount" class="count-badge">0</span>
+            </button>
+          </div>
+
+          <section id="systemPanel" class="interaction-panel system-panel" role="tabpanel" aria-labelledby="systemTab">
+            <div class="region-heading compact-heading">
+              <div>
+                <span class="eyebrow">Configured system</span>
+                <h1 id="interactionHeading">Capabilities</h1>
+              </div>
+              <span class="configured-badge">Configuration</span>
+            </div>
+
+            <div class="system-counts" aria-label="System capability counts">
+              <div><strong id="capabilityCount">—</strong><span>controls</span></div>
+              <div><strong id="guardrailCount">—</strong><span>input rails</span></div>
+              <div><strong id="toolCount">—</strong><span>scoped tools</span></div>
+            </div>
+
+            <section class="system-section identity-model-section" aria-labelledby="identityModelHeading">
+              <div class="section-title-row">
+                <h2 id="identityModelHeading">Separate personas, one client</h2>
+                <span id="accountMatchBadge" class="evidence-badge evidence-configured">Awaiting sign-in</span>
+              </div>
+              <p id="identityModelSummary" class="section-intro"></p>
+              <div class="identity-token-model">
+                <div class="human-identity-node">
+                  <span><i data-lucide="user-round"></i></span>
+                  <div>
+                    <strong id="identityClientName">LearningNeMo Local Client</strong>
+                    <code id="accountMatchDetail">Same client ID, separate user assignments</code>
+                    <div id="identityClientScopes" class="scope-list" aria-label="Shared client scopes"></div>
+                  </div>
+                </div>
+                <div id="identityProfileBranches" class="identity-profile-branches"></div>
+              </div>
+              <div class="production-note">
+                <i data-lucide="building-2"></i>
+                <p id="identityProductionNote"></p>
+              </div>
+            </section>
+
+            <section class="system-section" aria-labelledby="capabilityListHeading">
+              <div class="section-title-row">
+                <h2 id="capabilityListHeading">Active controls</h2>
+                <span class="evidence-badge evidence-configured">Configured</span>
+              </div>
+              <div id="capabilityList" class="capability-list">
+                <div class="system-loading"><span class="spinner"></span><span>Loading configuration</span></div>
+              </div>
+            </section>
+
+            <section class="system-section" aria-labelledby="guardrailHeading">
+              <div class="section-title-row">
+                <h2 id="guardrailHeading">Input Guardrails</h2>
+                <span class="local-badge">Local + APIM</span>
+              </div>
+              <p class="section-intro">Authentication passes first. These rails then inspect the prompt before tool selection or model execution.</p>
+              <div id="guardrailList" class="guardrail-list"></div>
+            </section>
+
+            <section class="system-section" aria-labelledby="toolMatrixHeading">
+              <div class="section-title-row">
+                <h2 id="toolMatrixHeading">Tool authorization</h2>
+                <span class="evidence-badge evidence-verified">Verified</span>
+              </div>
+              <div class="tool-table" role="table" aria-label="Tool scope requirements">
+                <div class="tool-row tool-header" role="row">
+                  <span role="columnheader">Tool</span><span role="columnheader">Scope</span><span role="columnheader">Role</span>
+                </div>
+                <div id="toolRows"></div>
+              </div>
+            </section>
+
+            <section class="system-section" aria-labelledby="journeyHeading">
+              <div class="section-title-row">
+                <h2 id="journeyHeading">What happens to a prompt</h2>
+                <span class="evidence-badge evidence-observed">Request path</span>
+              </div>
+              <div id="requestJourney" class="request-journey"></div>
+            </section>
+
+            <section class="system-section evidence-legend" aria-labelledby="evidenceHeading">
+              <h2 id="evidenceHeading">Evidence labels</h2>
+              <div id="evidenceLegend"></div>
+            </section>
+          </section>
+
+          <section id="promptPanel" class="interaction-panel" role="tabpanel" aria-labelledby="promptTab" hidden>
+            <div class="region-heading compact-heading">
+              <div>
+                <span class="eyebrow">Manual probe</span>
+                <h1>Ask the agent</h1>
+              </div>
+            </div>
+
+            <div class="current-persona-banner">
+              <i data-lucide="user-check"></i>
+              <span id="promptPersona">Sign in to detect access</span>
+            </div>
+
+            <div class="prompt-presets" aria-label="Prompt presets">
+              <button type="button" data-prompt="List all tasks with their IDs and statuses.">List tasks</button>
+              <button type="button" data-prompt="Execute task-1.">Execute task-1</button>
+              <button type="button" data-prompt="What is the current date and time?">Current time</button>
+            </div>
+
+            <div class="shared-state-note">
+              <i data-lucide="database"></i>
+              <span>Walkthrough and manual prompts share one in-memory task store. After an Operator completes task-1, another execute correctly reports it as already completed.</span>
+            </div>
+
+            <form id="promptForm" class="prompt-form">
+              <label for="promptInput">Message</label>
+              <textarea id="promptInput" rows="5" maxlength="4000" placeholder="Ask about tasks…" required></textarea>
+              <div class="prompt-submit-row">
+                <span id="promptMeta">Current signed-in user</span>
+                <button id="sendButton" class="button button-primary" type="submit">
+                  <i data-lucide="send"></i><span>Send</span>
+                </button>
+              </div>
+            </form>
+
+            <section id="manualResponse" class="manual-response" aria-live="polite">
+              <div class="response-empty">
+                <i data-lucide="messages-square"></i>
+                <span>No response yet</span>
+              </div>
+            </section>
+          </section>
+
+          <section id="activityPanel" class="interaction-panel" role="tabpanel" aria-labelledby="activityTab" hidden>
+            <div class="region-heading compact-heading">
+              <div>
+                <span class="eyebrow">This session</span>
+                <h1>Activity</h1>
+              </div>
+              <button id="clearActivityButton" class="icon-button" type="button" title="Clear activity">
+                <i data-lucide="trash-2"></i><span class="sr-only">Clear activity</span>
+              </button>
+            </div>
+            <div id="activityList" class="activity-list">
+              <div class="activity-empty"><i data-lucide="inbox"></i><span>No requests yet</span></div>
+            </div>
+          </section>
+        </aside>
+        </details>
+      </div>
+      </div>
+      </section>
+      <footer class="demo-footer"><span>LearningNeMo <span aria-hidden="true">/</span> Security engineering lab</span><span>Evidence before claims.</span></footer>
+    </div>
+
+    <dialog id="demoDocumentDialog" class="demo-document-dialog" aria-labelledby="demoDocumentTitle">
+      <div class="demo-document-heading"><h2 id="demoDocumentTitle">Engineering document</h2><button id="demoDocumentClose" type="button" class="icon-button" title="Close document"><i data-lucide="x"></i><span class="sr-only">Close document</span></button></div>
+      <pre id="demoDocumentBody" class="demo-document-body" tabindex="0"></pre>
+    </dialog>
+
+    <dialog id="authDialog" class="auth-dialog" aria-labelledby="authDialogTitle">
+      <div class="dialog-heading">
+        <span id="authDialogIcon" class="role-icon"><i data-lucide="badge-check"></i></span>
+        <div>
+          <span class="eyebrow">Microsoft Entra ID</span>
+          <h1 id="authDialogTitle">Sign in to LearningNeMo</h1>
+        </div>
+        <button id="closeAuthButton" class="icon-button" type="button" title="Cancel sign-in">
+          <i data-lucide="x"></i><span class="sr-only">Cancel sign-in</span>
+        </button>
+      </div>
+      <div id="deviceCodeBlock" class="device-code-block">
+        <span>Device code</span>
+        <strong id="deviceCode">•••••••••</strong>
+        <button id="copyCodeButton" class="icon-button" type="button" title="Copy device code">
+          <i data-lucide="copy"></i><span class="sr-only">Copy device code</span>
+        </button>
+      </div>
+      <div id="localAccountChoices" class="local-account-choices" hidden>
+        <button id="localOperatorButton" class="local-role-choice" type="button"><i data-lucide="wrench"></i><span><strong>Operator</strong><small>Analyze, propose, and execute</small></span></button>
+        <button id="localApproverButton" class="local-role-choice" type="button"><i data-lucide="badge-check"></i><span><strong>Approver</strong><small>Review the exact plan and decide</small></span></button>
+      </div>
+      <div id="authScopeList" class="scope-list"></div>
+      <p id="authRoleHint" class="auth-role-hint">Use your assigned Microsoft account. Your verified role determines access; Approvers cannot execute changes.</p>
+      <div id="authWaiting" class="auth-waiting" aria-live="polite">
+        <span class="spinner"></span>
+        <span id="authStatusText">Waiting for Microsoft sign-in</span>
+        <code id="authCountdown">15:00</code>
+      </div>
+      <a id="openMicrosoftButton" class="button button-primary full-width" href="https://microsoft.com/devicelogin" target="_blank" rel="noopener">
+        <i data-lucide="external-link"></i><span>Open Microsoft sign-in</span>
+      </a>
+    </dialog>
+
+    <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+  </body>
+</html>

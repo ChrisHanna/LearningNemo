@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "location": "eastus",
+  "environment": "dev",
+  "projectName": "learningnemo",
+  "artifactResourceGroupName": "rg-learningnemo-artifacts-dev",
+  "platformResourceGroupName": "rg-learningnemo-platform-dev",
+  "databaseResourceGroupName": "rg-learningnemo-data-dev",
+  "ownerTag": "learningnemo-portfolio",
+  "monthlyCostCeiling": 50,
+  "additionalTags": {
+    "dataClassification": "synthetic",
+    "workload": "agent-security-lab"
+  }
+}

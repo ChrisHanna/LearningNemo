@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "centralus"
+    },
+    "environment": {
+      "value": "dev"
+    },
+    "projectName": {
+      "value": "learningnemo"
+    },
+    "platformResourceGroupName": {
+      "value": "rg-learningnemo-platform-dev"
+    },
+    "databaseResourceGroupName": {
+      "value": "rg-learningnemo-data-dev"
+    },
+    "databaseName": {
+      "value": "learningnemo"
+    },
+    "ownerTag": {
+      "value": "learningnemo-portfolio"
+    },
+    "monthlyCostCeiling": {
+      "value": 50
+    },
+    "autoPauseDelayMinutes": {
+      "value": 60
+    },
+    "minVcores": {
+      "value": "0.5"
+    },
+    "maxVcores": {
+      "value": 2
+    },
+    "maxSizeBytes": {
+      "value": 34359738368
+    },
+    "useFreeLimit": {
+      "value": true
+    },
+    "freeLimitExhaustionBehavior": {
+      "value": "AutoPause"
+    },
+    "additionalTags": {
+      "value": {
+        "dataClassification": "synthetic",
+        "workload": "agent-security-lab"
+      }
+    }
+  }
+}

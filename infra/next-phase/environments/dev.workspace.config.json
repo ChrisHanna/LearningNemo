@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "location": "eastus",
+  "environment": "dev",
+  "projectName": "learningnemo",
+  "sawResourceGroupName": "rg-learningnemo-saw-dev",
+  "platformResourceGroupName": "rg-learningnemo-platform-dev",
+  "sawVnetName": "vnet-learningnemo-saw-dev",
+  "workspaceSubnetName": "snet-workspace",
+  "vmName": "vm-learningnemo-saw-dev",
+  "vmSize": "Standard_D2s_v5",
+  "adminUsername": "sawadmin",
+  "imagePublisher": "Canonical",
+  "imageOffer": "ubuntu-24_04-lts",
+  "imageSku": "server",
+  "imageVersion": "24.04.202608270",
+  "openShellVersion": "0.0.116",
+  "openShellPackageUrl": "https://github.com/NVIDIA/OpenShell/releases/download/v0.0.116/openshell_0.0.116-1_amd64.deb",
+  "openShellPackageSha256": "883b5223399dd30a2b33b7f76817fd81295d610ce6f2d04a0266fc7cfbf87575",
+  "sandboxImageReference": "ghcr.io/nvidia/openshell-community/sandboxes/base@sha256:c2a43bb0d765774e2790b3babfb20997bb2eac7b4bf4c6d7d8661e99817bf904",
+  "supervisorImageReference": "ghcr.io/nvidia/openshell/supervisor@sha256:1f02f37ee9e16c3b1245b80899a954fc8198099494d4fe0cd1e891fc63adf127",
+  "sandboxVcpus": 1,
+  "sandboxMemoryMiB": 1024,
+  "sandboxOverlayMiB": 2048,
+  "ownerTag": "learningnemo-portfolio",
+  "additionalTags": {
+    "dataClassification": "synthetic",
+    "workload": "agent-security-lab"
+  }
+}

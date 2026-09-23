@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "location": "eastus",
+  "environment": "dev",
+  "projectName": "learningnemo",
+  "databaseNetworkResourceGroupName": "rg-learningnemo-data-network-dev",
+  "databaseResourceGroupName": "rg-learningnemo-data-dev",
+  "databaseName": "learningnemo",
+  "platformResourceGroupName": "rg-learningnemo-platform-dev",
+  "platformVnetName": "vnet-learningnemo-platform-dev",
+  "privateEndpointSubnetName": "snet-private-endpoints",
+  "ownerTag": "learningnemo-portfolio",
+  "additionalTags": {
+    "dataClassification": "synthetic",
+    "workload": "agent-security-lab"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "platform": "Linux or Windows WSL2",
+  "minimum": {
+    "azureCli": "2.76.0",
+    "bicep": "0.35.0",
+    "python": "3.11.0",
+    "bash": "4.4.0",
+    "uv": "0.8.0"
+  },
+  "tested": {
+    "azureCli": "2.90.0",
+    "bicep": "0.47.16",
+    "python": "3.12.3",
+    "bash": "5.2.21",
+    "uv": "0.12.13"
+  }
+}

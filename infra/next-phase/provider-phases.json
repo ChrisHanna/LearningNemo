@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "phases": {
+    "foundation": [
+      "Microsoft.Authorization",
+      "Microsoft.Network",
+      "Microsoft.Resources"
+    ],
+    "cost": [
+      "Microsoft.Consumption",
+      "Microsoft.Resources"
+    ],
+    "identities": [
+      "Microsoft.ManagedIdentity",
+      "Microsoft.Resources"
+    ],
+    "platform": [
+      "Microsoft.App",
+      "Microsoft.Resources"
+    ],
+    "platform-services": [
+      "Microsoft.ContainerRegistry",
+      "Microsoft.Insights",
+      "Microsoft.KeyVault",
+      "Microsoft.OperationalInsights",
+      "Microsoft.Storage"
+    ],
+    "database": [
+      "Microsoft.ManagedIdentity",
+      "Microsoft.Network",
+      "Microsoft.Resources",
+      "Microsoft.Sql"
+    ],
+    "artifacts": [
+      "Microsoft.Authorization",
+      "Microsoft.ContainerRegistry",
+      "Microsoft.Resources"
+    ],
+    "workspace": [
+      "Microsoft.Compute"
+    ]
+  }
+}

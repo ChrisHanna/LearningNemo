@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "location": "eastus",
+  "environment": "dev",
+  "projectName": "learningnemo",
+  "controlResourceGroupName": "rg-learningnemo-control-cycle-dev",
+  "platformResourceGroupName": "rg-learningnemo-platform-dev",
+  "containerAppsEnvironmentName": "cae-learningnemo-dev",
+  "artifactResourceGroupName": "rg-learningnemo-artifacts-dev",
+  "databaseResourceGroupName": "rg-learningnemo-data-dev",
+  "databaseName": "learningnemo",
+  "ownerTag": "learningnemo-portfolio",
+  "additionalTags": {
+    "dataClassification": "synthetic",
+    "workload": "agent-security-lab"
+  }
+}

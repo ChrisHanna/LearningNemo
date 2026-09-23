@@ -1,0 +1,43 @@
+version: 1
+filesystem_policy:
+  include_workdir: false
+  read_only:
+    - /usr
+    - /bin
+    - /lib
+    - /lib64
+    - /etc
+    - /opt/venv
+    - /app
+    - /var/log
+    - /proc
+    - /dev/urandom
+  read_write:
+    - /tmp
+landlock:
+  compatibility: best_effort
+process:
+  run_as_user: sandbox
+  run_as_group: sandbox
+network_policies:
+  invoice_planning:
+    name: invoice_planning
+    endpoints:
+      - host: ca-nemo-invoice-planning-dev.jollybeach-503c7ed1.eastus.azurecontainerapps.io
+        port: 443
+        protocol: rest
+        tls: terminate
+        enforcement: enforce
+        rules:
+          - allow:
+              method: POST
+              path: /v2/invoice/tools/invoice_summary
+          - allow:
+              method: POST
+              path: /v2/invoice/tools/invoice_batches
+          - allow:
+              method: POST
+              path: /v2/invoice/inference/v1/chat/completions
+    binaries:
+      - path: /usr/local/bin/python3.12
+      - path: /usr/bin/curl

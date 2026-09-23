@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "eastus"
+    },
+    "environment": {
+      "value": "dev"
+    },
+    "projectName": {
+      "value": "learningnemo"
+    },
+    "platformResourceGroupName": {
+      "value": "rg-learningnemo-platform-dev"
+    },
+    "containerAppsEnvironmentName": {
+      "value": "cae-learningnemo-dev"
+    },
+    "monthlyCostCeiling": {
+      "value": 50
+    },
+    "ownerTag": {
+      "value": "learningnemo-portfolio"
+    },
+    "expiresAt": {
+      "value": "__RUNTIME__"
+    },
+    "additionalTags": {
+      "value": {
+        "dataClassification": "synthetic",
+        "workload": "agent-security-lab"
+      }
+    }
+  }
+}

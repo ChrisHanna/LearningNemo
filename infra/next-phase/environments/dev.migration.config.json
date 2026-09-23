@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "location": "eastus",
+  "environment": "dev",
+  "projectName": "learningnemo",
+  "migrationResourceGroupName": "rg-learningnemo-migration-dev",
+  "platformResourceGroupName": "rg-learningnemo-platform-dev",
+  "containerAppsEnvironmentName": "cae-learningnemo-dev",
+  "databaseResourceGroupName": "rg-learningnemo-data-dev",
+  "databaseName": "learningnemo",
+  "ownerTag": "learningnemo-portfolio",
+  "additionalTags": {
+    "dataClassification": "synthetic",
+    "workload": "agent-security-lab"
+  }
+}

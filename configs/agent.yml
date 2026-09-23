@@ -1,0 +1,122 @@
+functions:
+  current_datetime:
+    _type: current_datetime
+    middleware:
+      - authorize_agent
+  list_tasks:
+    _type: list_tasks
+    middleware:
+      - authorize_tasks_read
+  execute_task:
+    _type: execute_task
+    middleware:
+      - authorize_tasks_execute
+  reset_tasks:
+    _type: reset_tasks
+    middleware:
+      - authorize_tasks_execute
+
+authentication:
+  entra_jwt:
+    _type: jwt
+    issuer_url: https://login.microsoftonline.com/${ENTRA_TENANT_ID}/v2.0
+    jwks_uri: https://login.microsoftonline.com/${ENTRA_TENANT_ID}/discovery/v2.0/keys
+    audience: ${ENTRA_CLIENT_ID}
+    scopes: []
+
+general:
+  front_end:
+    _type: fastapi
+    host: 127.0.0.1
+    port: 8001
+    accepted_identity_credentials:
+      - jwt
+    identity_authentication:
+      - entra_jwt
+
+llms:
+  openai_llm:
+    _type: openai
+    base_url: ${OPENAI_BASE_URL}
+    model_name: gpt-4o-mini
+    temperature: 0.0
+
+middleware:
+  local_input_sanitization:
+    _type: guardrails
+    workflow_functions:
+      "<workflow>":
+        messages:
+          - content
+        input_message: []
+    guardrails:
+      models: []
+      colang_version: "1.0"
+      rails:
+        input:
+          flows:
+            - mask sensitive data on input
+        config:
+          sensitive_data_detection:
+            input:
+              entities:
+                - PERSON
+                - EMAIL_ADDRESS
+                - PHONE_NUMBER
+  semantic_input_guardrails:
+    _type: semantic_guardrail
+    base_url: ${OPENAI_GUARDRAIL_BASE_URL}
+    api_key_env: OPENAI_API_KEY
+    timeout_seconds: 15
+    max_input_chars: 4000
+  authenticate_entra:
+    _type: entra_authentication
+    auth_provider: entra_jwt
+    allowed_client_ids:
+      - ${ENTRA_PUBLIC_CLIENT_ID}
+    max_token_age_seconds: 900
+    required_scopes:
+      - agent.invoke
+    required_roles:
+      - Task.Reader
+  authorize_agent:
+    _type: require_access
+    required_scopes:
+      - agent.invoke
+    required_roles:
+      - Task.Reader
+  authorize_tasks_read:
+    _type: require_access
+    required_scopes:
+      - tasks.read
+    required_roles:
+      - Task.Reader
+  authorize_tasks_execute:
+    _type: require_access
+    required_scopes:
+      - tasks.execute
+    required_roles:
+      - Task.Operator
+
+workflow:
+  _type: tool_calling_agent
+  llm_name: openai_llm
+  tool_names:
+    - current_datetime
+    - list_tasks
+    - execute_task
+    - reset_tasks
+  middleware:
+    - authenticate_entra
+    - local_input_sanitization
+    - semantic_input_guardrails
+  max_iterations: 2
+  handle_tool_errors: false
+  verbose: true
+  system_prompt: >-
+    You are a task operations assistant. Use current_datetime for the current
+    date or time, list_tasks to inspect tasks, and execute_task only when the
+    user explicitly asks to execute a task. When the user supplies a task ID,
+    call execute_task directly without listing tasks first. Use reset_tasks
+    only when the user explicitly asks to reset demo task state. Never claim
+    an unauthorized tool succeeded.

@@ -1,0 +1,4070 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "LearningNeMo: enable operator-managed availability",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": ["-d", "Ubuntu-24.04", "--", "env", "AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b", "LEARNINGNEMO_AZURE_APPLY=operator-managed-invoice", "/home/aygul/.venvs/nemo-agents/bin/python", "infra/next-phase/configure_invoice_availability.py", "enable", "--apply"],
+			"problemMatcher": [],
+			"presentation": { "panel": "dedicated", "reveal": "silent" }
+		},
+		{
+			"label": "LearningNeMo: verify operator-managed availability",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": ["-d", "Ubuntu-24.04", "--", "env", "AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b", "/home/aygul/.venvs/nemo-agents/bin/python", "infra/next-phase/configure_invoice_availability.py", "verify"],
+			"problemMatcher": [],
+			"presentation": { "panel": "dedicated", "reveal": "silent" }
+		},
+		{
+			"label": "LearningNeMo: pause managed sandbox admission",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": ["-d", "Ubuntu-24.04", "--", "env", "AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b", "LEARNINGNEMO_AZURE_APPLY=operator-managed-invoice", "/home/aygul/.venvs/nemo-agents/bin/python", "infra/next-phase/configure_invoice_availability.py", "pause", "--apply"],
+			"problemMatcher": [],
+			"presentation": { "panel": "dedicated", "reveal": "silent" }
+		},
+		{
+			"label": "LearningNeMo: explicitly shut down managed host",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": ["-d", "Ubuntu-24.04", "--", "env", "AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b", "LEARNINGNEMO_AZURE_APPLY=operator-managed-invoice", "/home/aygul/.venvs/nemo-agents/bin/python", "infra/next-phase/configure_invoice_availability.py", "shutdown-host", "--apply"],
+			"problemMatcher": [],
+			"presentation": { "panel": "dedicated", "reveal": "silent" }
+		},
+		{
+			"label": "LearningNeMo: deploy invoice console",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": ["-d", "Ubuntu-24.04", "--", "env", "AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b", "LEARNINGNEMO_AZURE_APPLY=cloud-demo", "LEARNINGNEMO_INVOICE_OPERATOR_ORIGIN=https://ca-nemo-invoice-operator-dev.internal.jollybeach-503c7ed1.eastus.azurecontainerapps.io", "LEARNINGNEMO_INVOICE_REVIEW_ORIGIN=https://ca-nemo-invoice-review-dev.internal.jollybeach-503c7ed1.eastus.azurecontainerapps.io", "bash", "infra/next-phase/deploy-cloud-demo.sh", "--apply"],
+			"problemMatcher": [],
+			"presentation": { "panel": "dedicated", "reveal": "silent" }
+		},
+		{
+			"label": "LearningNeMo: activate invoice services",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": ["-d", "Ubuntu-24.04", "--", "env", "AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b", "LEARNINGNEMO_AZURE_APPLY=invoice-services", "bash", "scripts/activate-invoice-services.sh"],
+			"problemMatcher": [],
+			"presentation": { "panel": "dedicated", "reveal": "silent" }
+		},
+		{
+			"label": "LearningNeMo: stage invoice agent image",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": ["-d", "Ubuntu-24.04", "--", "env", "AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b", "LEARNINGNEMO_AZURE_APPLY=invoice-image-stage", "/home/aygul/.venvs/nemo-agents/bin/python", "infra/next-phase/stage_invoice_image.py"],
+			"problemMatcher": [],
+			"presentation": { "panel": "dedicated", "reveal": "silent" }
+		},
+		{
+			"label": "LearningNeMo: renew invoice dependencies",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": ["-d", "Ubuntu-24.04", "--", "env", "AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b", "LEARNINGNEMO_AZURE_APPLY=renew-demo-window", "bash", "scripts/renew-demo-window.sh", "--dependencies-only", "--allow-invoice-services"],
+			"problemMatcher": [],
+			"presentation": { "panel": "dedicated", "reveal": "silent" }
+		},
+		{
+			"label": "LearningNeMo: inspect invoice image build",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": ["-d", "Ubuntu-24.04", "--", "tail", "-n", "55", "/home/aygul/.local/state/learningnemo/invoice-agent-build.log"],
+			"problemMatcher": [],
+			"presentation": { "panel": "dedicated", "reveal": "silent" }
+		},
+		{
+			"label": "LearningNeMo: install invoice image cache",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": ["-d", "Ubuntu-24.04", "--", "az", "vm", "run-command", "invoke", "--subscription", "40dbf703-f68a-4ca1-b315-c37f3308c38b", "-g", "rg-learningnemo-saw-dev", "-n", "vm-learningnemo-saw-dev", "--command-id", "RunShellScript", "--scripts", "@/mnt/c/Users/aygul/Desktop/agents/scripts/install-invoice-image-cache.sh", "-o", "json"],
+			"problemMatcher": [],
+			"presentation": { "panel": "dedicated", "reveal": "silent" }
+		},
+		{
+			"label": "LearningNeMo: renew dependencies only",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": ["-d", "Ubuntu-24.04", "--", "env", "AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b", "LEARNINGNEMO_AZURE_APPLY=renew-demo-window", "bash", "scripts/renew-demo-window.sh", "--dependencies-only"],
+			"problemMatcher": [],
+			"presentation": { "panel": "dedicated", "reveal": "silent" }
+		},
+		{
+			"label": "LearningNeMo: deploy complete workflow console",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": ["-d", "Ubuntu-24.04", "--", "env", "AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b", "LEARNINGNEMO_AZURE_APPLY=cloud-demo", "LEARNINGNEMO_HUMAN_SERVICES_VERIFIED=yes", "LEARNINGNEMO_INCIDENT_ORIGIN=https://ca-learningnemo-incident-dev.internal.jollybeach-503c7ed1.eastus.azurecontainerapps.io", "LEARNINGNEMO_REVIEW_ORIGIN=https://ca-learningnemo-review-dev.internal.jollybeach-503c7ed1.eastus.azurecontainerapps.io", "LEARNINGNEMO_EXECUTION_ORIGIN=https://ca-learningnemo-execution-dev.internal.jollybeach-503c7ed1.eastus.azurecontainerapps.io", "bash", "infra/next-phase/deploy-cloud-demo.sh", "--apply"],
+			"problemMatcher": [],
+			"presentation": { "panel": "dedicated", "reveal": "silent" }
+		},
+		{
+			"label": "LearningNeMo: rebootstrap retained sandboxes",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=resume-owned-sandboxes",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"infra/next-phase/resume_workspace_sandboxes.py",
+				"--rebootstrap"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: apply Planning TLS policy",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=planning-tls-policy",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"infra/next-phase/apply_workspace_tls.py"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: provision Azure DNS sandboxes",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=resume-owned-sandboxes",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"infra/next-phase/resume_workspace_sandboxes.py",
+				"--repair-resolvers"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: start preserved sandboxes",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=resume-owned-sandboxes",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"infra/next-phase/resume_workspace_sandboxes.py",
+				"--start-existing"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: repair Planning resolver",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"vm",
+				"run-command",
+				"invoke",
+				"-g",
+				"rg-learningnemo-saw-dev",
+				"-n",
+				"vm-learningnemo-saw-dev",
+				"--command-id",
+				"RunShellScript",
+				"--scripts",
+				"@scripts/repair-sandbox-resolver.sh",
+				"--query",
+				"value[].message",
+				"-o",
+				"json"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: inspect sandbox lifecycle",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"vm",
+				"run-command",
+				"invoke",
+				"-g",
+				"rg-learningnemo-saw-dev",
+				"-n",
+				"vm-learningnemo-saw-dev",
+				"--command-id",
+				"RunShellScript",
+				"--scripts",
+				"@scripts/inspect-sandbox-lifecycle.sh",
+				"--query",
+				"value[].message",
+				"-o",
+				"json"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: logged workspace proof",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"infra/next-phase/run_workspace_proof.py"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: recovery progress",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"python3",
+				"infra/next-phase/recovery_progress.py"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: summarize boot diagnostics",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"python3",
+				"infra/next-phase/inspect_saw_boot.py"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: build console diagnostics",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=cloud-demo-build",
+				"bash",
+				"scripts/build-cloud-demo.sh",
+				"console"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: verify human recovery",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"python3",
+				"infra/next-phase/verify_human_services.py"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: deploy console diagnostics",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=cloud-demo",
+				"LEARNINGNEMO_HUMAN_SERVICES_VERIFIED=yes",
+				"LEARNINGNEMO_INCIDENT_ORIGIN=https://ca-learningnemo-incident-dev.internal.jollybeach-503c7ed1.eastus.azurecontainerapps.io",
+				"LEARNINGNEMO_REVIEW_ORIGIN=https://ca-learningnemo-review-dev.internal.jollybeach-503c7ed1.eastus.azurecontainerapps.io",
+				"bash",
+				"infra/next-phase/deploy-cloud-demo.sh",
+				"--apply"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: renew demo recovery window",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=renew-demo-window",
+				"bash",
+				"scripts/renew-demo-window.sh"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: collect runtime diagnostics",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"python3",
+				"infra/next-phase/collect_runtime_diagnostics.py",
+				"--cloud-agent-logs"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: diagnostic logging tests",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"tests/test_diagnostic_attempt.py",
+				"tests/test_registry_bootstrap.py",
+				"tests/test_runtime_diagnostics.py",
+				"tests/test_resume_failure_logging.py",
+				"tests/test_agent_client_contract.py",
+				"tests/test_console.py"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			},
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: close runtime recovery",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_DELETE=runtime-approved-egress",
+				"python3",
+				"infra/next-phase/deploy_runtime_egress.py",
+				"--remove"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: full regression tests",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			},
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: execution coordinator tests",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"tests/test_execution_coordinator.py",
+				"tests/test_execution_transport.py",
+				"tests/test_execution_api.py",
+				"tests/test_mssql_client.py",
+				"tests/test_sql_adapters.py"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			},
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: effective runtime network",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"python3",
+				"scripts/incident-preflight.py",
+				"--network"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: inspect runtime network",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"vm",
+				"run-command",
+				"invoke",
+				"-g",
+				"rg-learningnemo-saw-dev",
+				"-n",
+				"vm-learningnemo-saw-dev",
+				"--command-id",
+				"RunShellScript",
+				"--scripts",
+				"@scripts/inspect-saw-network.sh",
+				"--query",
+				"value[].message",
+				"-o",
+				"json"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: remove failed provisioning",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"vm",
+				"run-command",
+				"invoke",
+				"-g",
+				"rg-learningnemo-saw-dev",
+				"-n",
+				"vm-learningnemo-saw-dev",
+				"--command-id",
+				"RunShellScript",
+				"--scripts",
+				"@scripts/remove-failed-planning.sh",
+				"--query",
+				"value[].message",
+				"-o",
+				"json"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: resume owned sandboxes",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=resume-owned-sandboxes",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"infra/next-phase/resume_workspace_sandboxes.py"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: inspect preserved runtime",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"vm",
+				"run-command",
+				"invoke",
+				"-g",
+				"rg-learningnemo-saw-dev",
+				"-n",
+				"vm-learningnemo-saw-dev",
+				"--command-id",
+				"RunShellScript",
+				"--scripts",
+				"@scripts/inspect-saw-runtime.sh",
+				"--query",
+				"value[].message",
+				"-o",
+				"json"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: deploy runtime egress",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=runtime-approved-egress",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"infra/next-phase/deploy_runtime_egress.py"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: recover preserved workspace",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=renew-preserved-saw",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"infra/next-phase/renew_preserved_workspace.py",
+				"--apply"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: renew existing workers",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=renew-trusted-workers",
+				"python3",
+				"infra/next-phase/renew_trusted_workers.py"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: incident preflight",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"python3",
+				"scripts/incident-preflight.py"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: runtime egress tests",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"tests/test_runtime_egress.py",
+				"tests/test_live_workspace.py",
+				"tests/test_cloud_controller.py",
+				"tests/test_preserved_workspace_renewal.py",
+				"tests/test_registry_bootstrap.py"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			},
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: cloud agent logs",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"containerapp",
+				"logs",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-demo-dev",
+				"--name",
+				"ca-learningnemo-agent-dev",
+				"--type",
+				"console",
+				"--tail",
+				"80",
+				"--format",
+				"json"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			}
+		},
+		{
+			"label": "LearningNeMo: cloud authentication tests",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"tests/test_cloud_auth.py"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "silent"
+			},
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: test atomic remediation",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_trusted_runtime.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: verify atomic remediation",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_trusted_runtime.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: test SQL adapters",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_adapters.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_trusted_runtime.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_trusted_workflow.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: test cooperative SQL cancellation",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_adapters.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: inspect SQL toolchain",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"for command in sqlcmd sqlfluff docker podman; do if command -v \"$command\" >/dev/null; then echo \"$command=$(command -v \"$command\")\"; \"$command\" --version 2>/dev/null | head -n 1 || true; else echo \"$command=absent\"; fi; done"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: parse T-SQL migrations",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.local/bin/uvx",
+				"--from",
+				"sqlfluff==3.4.2",
+				"sqlfluff",
+				"parse",
+				"--dialect",
+				"tsql",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/sql/001_schema.sql",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/sql/002_procedures.sql",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/sql/003_seed.sql"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: parse T-SQL directory",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.local/bin/uvx",
+				"--from",
+				"sqlfluff==3.4.2",
+				"sqlfluff",
+				"parse",
+				"--dialect",
+				"tsql",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/sql"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: retest SQL adapters",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_adapters.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: validate SQL migrations",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_migrations.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_adapters.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: compile WP3 SQL IaC",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -e; az bicep build --file /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/database.bicep --outfile /tmp/learningnemo-database.json; az bicep build --file /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/database-network.bicep --outfile /tmp/learningnemo-database-network.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: recompile WP3 SQL IaC",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -e; az bicep build --file /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/database.bicep --outfile /tmp/learningnemo-database.json; az bicep build --file /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/database-network.bicep --outfile /tmp/learningnemo-database-network.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: compile clean WP3 SQL IaC",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -e; az bicep build --file /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/database.bicep --outfile /tmp/learningnemo-database.json; az bicep build --file /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/database-network.bicep --outfile /tmp/learningnemo-database-network.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: verify WP3 SQL compilation",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -e; az bicep build --file /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/database.bicep --outfile /tmp/learningnemo-database.json; az bicep build --file /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/database-network.bicep --outfile /tmp/learningnemo-database-network.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: stage WP3 compiled templates",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"cp",
+				"/tmp/learningnemo-database.json",
+				"/tmp/learningnemo-database-network.json",
+				"/mnt/c/Users/aygul/AppData/Local/Temp/"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: compile isolated WP3 stack",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -e; az bicep build --file /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/database-stack.bicep --outfile /tmp/learningnemo-database-stack.json; az bicep build --file /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/database-network.bicep --outfile /tmp/learningnemo-database-network.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: verify isolated WP3 stack",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -e; az bicep build --file /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/database-stack.bicep --outfile /tmp/learningnemo-database-stack.json; az bicep build --file /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/database-network.bicep --outfile /tmp/learningnemo-database-network.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: stage isolated WP3 templates",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"cp",
+				"/tmp/learningnemo-database-stack.json",
+				"/tmp/learningnemo-database-network.json",
+				"/mnt/c/Users/aygul/AppData/Local/Temp/"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: validate WP3 SQL IaC",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -e; python3 /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/validate-database.py /tmp/learningnemo-database-stack.json /tmp/learningnemo-database-network.json; env PYTHONDONTWRITEBYTECODE=1 /home/aygul/.venvs/nemo-agents/bin/python -m pytest -q /mnt/c/Users/aygul/Desktop/agents/tests/test_database_infra.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: run local WP3 gate",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/test-database.sh"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: lock SQL validator",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.local/bin/uv",
+				"lock",
+				"--project",
+				"/mnt/c/Users/aygul/Desktop/agents"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: sync SQL validator",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"UV_PROJECT_ENVIRONMENT=/home/aygul/.venvs/nemo-agents",
+				"/home/aygul/.local/bin/uv",
+				"sync",
+				"--locked",
+				"--project",
+				"/mnt/c/Users/aygul/Desktop/agents"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: parse materialized SQL bundle",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_migrations.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: report SQL parse issues",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_migrations.py::test_migration_bundle_materializes_distinct_identity_sids"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: inspect rendered SQL violations",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -e; python3 /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/sql_migrations.py materialize --identities /mnt/c/Users/aygul/AppData/Local/Temp/learningnemo-sql-identities.json --output /tmp/learningnemo-migrations.sql >/dev/null; /home/aygul/.venvs/nemo-agents/bin/sqlfluff parse --dialect tsql --format yaml /tmp/learningnemo-migrations.sql"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: list SQL batch violations",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"/mnt/c/Users/aygul/AppData/Local/Temp/inspect-learningnemo-sql.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: reparse SQL migration bundle",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_migrations.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: verify rendered SQL syntax",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_migrations.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: inspect rendered security batch",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -e; python3 /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/sql_migrations.py materialize --identities /mnt/c/Users/aygul/AppData/Local/Temp/learningnemo-sql-identities.json --output /tmp/learningnemo-migrations.sql >/dev/null; awk 'BEGIN{batch=1} /^GO$/{batch++;next} batch==35{print NR \":\" $0}' /tmp/learningnemo-migrations.sql"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: stage rendered SQL",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"python3 /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/sql_migrations.py materialize --identities /mnt/c/Users/aygul/AppData/Local/Temp/learningnemo-sql-identities.json --output /tmp/learningnemo-migrations.sql; cp /tmp/learningnemo-migrations.sql /mnt/c/Users/aygul/AppData/Local/Temp/learningnemo-migrations.sql"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: validate all rendered SQL",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_migrations.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: verify complete local WP3",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/test-database.sh"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: WP3 Azure what-if",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/deploy-database.sh",
+				"--what-if"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: preview WP3 providers",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/register-providers.sh",
+				"--phase",
+				"database"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: register SQL provider",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -euo pipefail; export AZURE_SUBSCRIPTION_ID=\"$(az account show --query id --output tsv)\"; export LEARNINGNEMO_AZURE_APPLY=provider-registration; bash /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/register-providers.sh --phase database --apply"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: rerun WP3 what-if",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/deploy-database.sh",
+				"--what-if"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: final WP3 plan review",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/deploy-database.sh",
+				"--what-if"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: deploy WP3 database base",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -euo pipefail; export AZURE_SUBSCRIPTION_ID=\"$(az account show --query id --output tsv)\"; export LEARNINGNEMO_AZURE_APPLY=wp3-database; bash /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/deploy-database.sh --apply"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: inspect failed WP3 residue",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"resource",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-data-dev",
+				"--query",
+				"[].type",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: check eastus2 SQL SKU",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"sql",
+				"db",
+				"list-editions",
+				"--location",
+				"eastus2",
+				"--query",
+				"length([?name=='GP_S_Gen5_2'])",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: check centralus SQL SKU",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"sql",
+				"db",
+				"list-editions",
+				"--location",
+				"centralus",
+				"--query",
+				"length([?name=='GP_S_Gen5_2'])",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: query SQL region capabilities",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"python3",
+				"/mnt/c/Users/aygul/AppData/Local/Temp/check-learningnemo-sql-regions.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: inspect SQL SKU fields",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"python3",
+				"/mnt/c/Users/aygul/AppData/Local/Temp/check-learningnemo-sql-regions.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: resolve SQL region SKU",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"python3",
+				"/mnt/c/Users/aygul/AppData/Local/Temp/check-learningnemo-sql-regions.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: preview failed WP3 cleanup",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/remove-database.sh"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: remove failed WP3 residue",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -euo pipefail; export AZURE_SUBSCRIPTION_ID=\"$(az account show --query id --output tsv)\"; export LEARNINGNEMO_AZURE_DELETE=wp3-database; bash /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/remove-database.sh --apply"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: validate eastus2 WP3 plan",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/deploy-database.sh",
+				"--what-if"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: inspect eastus2 free capability",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"python3",
+				"/mnt/c/Users/aygul/AppData/Local/Temp/check-learningnemo-sql-regions.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: validate centralus WP3 plan",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/deploy-database.sh",
+				"--what-if"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: final centralus WP3 plan",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/deploy-database.sh",
+				"--what-if"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: deploy centralus WP3 base",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -euo pipefail; export AZURE_SUBSCRIPTION_ID=\"$(az account show --query id --output tsv)\"; export LEARNINGNEMO_AZURE_APPLY=wp3-database; bash /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/deploy-database.sh --apply"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: inspect deployed WP3 types",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"resource",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-data-dev",
+				"--query",
+				"[].type",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: verify deployed WP3 base",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -euo pipefail; export AZURE_SUBSCRIPTION_ID=\"$(az account show --query id --output tsv)\"; python3 /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/verify_database.py --parameters /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/environments/dev.database.parameters.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: lock GA SQL driver",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.local/bin/uv",
+				"lock",
+				"--project",
+				"/mnt/c/Users/aygul/Desktop/agents"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: sync GA SQL driver",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"UV_PROJECT_ENVIRONMENT=/home/aygul/.venvs/nemo-agents",
+				"/home/aygul/.local/bin/uv",
+				"sync",
+				"--locked",
+				"--project",
+				"/mnt/c/Users/aygul/Desktop/agents"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: test GA SQL client",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_mssql_client.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_adapters.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: reconcile WP3 database base",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -euo pipefail; export AZURE_SUBSCRIPTION_ID=\"$(az account show --query id --output tsv)\"; export LEARNINGNEMO_AZURE_APPLY=wp3-database; bash /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/deploy-database.sh --apply"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: inspect artifact ARM types",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -euo pipefail; cd /mnt/c/Users/aygul/Desktop/agents; az bicep build --file infra/next-phase/artifact-registry-stack.bicep --outfile /tmp/learningnemo-artifacts.json >/dev/null; python3 - /tmp/learningnemo-artifacts.json <<'PY'\nimport collections\nimport json\nimport sys\n\ndef walk(value):\n    if isinstance(value, dict):\n        if \"type\" in value:\n            yield str(value[\"type\"])\n        for child in value.values():\n            yield from walk(child)\n    elif isinstance(value, list):\n        for child in value:\n            yield from walk(child)\n\nprint(dict(sorted(collections.Counter(walk(json.load(open(sys.argv[1], encoding=\"utf-8\")))).items())))\nPY\nrm -f /tmp/learningnemo-artifacts.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: compile artifact stack",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"bicep",
+				"build",
+				"--file",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/artifact-registry-stack.bicep",
+				"--outfile",
+				"/tmp/learningnemo-artifacts.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: report artifact ARM types",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"python3",
+				"-c",
+				"import json,sys; d=json.load(open(sys.argv[1],encoding='utf-8')); print([r.get('type') for r in d.get('resources',[])]); print([[x.get('type') for x in ((r.get('properties') or {}).get('template') or {}).get('resources',[])] for r in d.get('resources',[])])",
+				"/tmp/learningnemo-artifacts.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: report artifact ARM types 2",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"python3",
+				"-c",
+				"import json,sys; d=json.load(open(sys.argv[1],encoding=\"utf-8\")); print([r.get(\"type\") for r in d.get(\"resources\",[])]); print([[x.get(\"type\") for x in ((r.get(\"properties\") or {}).get(\"template\") or {}).get(\"resources\",[])] for r in d.get(\"resources\",[])])",
+				"/tmp/learningnemo-artifacts.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: report artifact ARM types 3",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"python3",
+				"-c",
+				"import json,sys; d=json.load(open(sys.argv[1])); print([r.get(sys.argv[2]) for r in d.get(sys.argv[3],[])]); print([[x.get(sys.argv[2]) for x in ((r.get(sys.argv[4]) or {}).get(sys.argv[5]) or {}).get(sys.argv[3],[])] for r in d.get(sys.argv[3],[])])",
+				"/tmp/learningnemo-artifacts.json",
+				"type",
+				"resources",
+				"properties",
+				"template"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: inspect artifact JSON shape",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"python3",
+				"-c",
+				"import json,sys; d=json.load(open(sys.argv[1])); print(type(d).__name__, len(d) if hasattr(d,sys.argv[2]) else -1)",
+				"/tmp/learningnemo-artifacts.json",
+				"__len__"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: inspect artifact resources shape",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"python3",
+				"-c",
+				"import json,sys; d=json.load(open(sys.argv[1])); x=d.get(sys.argv[2]); print(type(x).__name__, len(x))",
+				"/tmp/learningnemo-artifacts.json",
+				"resources"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: view artifact ARM structure",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"head",
+				"-n",
+				"160",
+				"/tmp/learningnemo-artifacts.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: test artifact delivery IaC",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/test-artifacts.sh"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: test image release evidence",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"cd /mnt/c/Users/aygul/Desktop/agents; set -euo pipefail; bash -n scripts/install-supply-chain-tools.sh; PYTHONDONTWRITEBYTECODE=1 /home/aygul/.venvs/nemo-agents/bin/python -m pytest -q tests/test_trusted_image_release.py tests/test_trusted_image.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: install pinned supply-chain tools",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"/mnt/c/Users/aygul/Desktop/agents/scripts/install-supply-chain-tools.sh"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: resolve base image digests",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -euo pipefail; tools=${XDG_DATA_HOME:-$HOME/.local/share}/learningnemo/bin; printf 'BUILD='; \"$tools/crane\" digest docker.io/library/python:3.11.16-slim-bookworm; printf 'RUNTIME='; \"$tools/crane\" digest gcr.io/distroless/python3-debian12:nonroot"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: resolve Python base digest",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.local/share/learningnemo/bin/crane",
+				"digest",
+				"docker.io/library/python:3.11.16-slim-bookworm"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: resolve distroless base digest",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.local/share/learningnemo/bin/crane",
+				"digest",
+				"gcr.io/distroless/python3-debian12:nonroot"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: test reproducible image release",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"cd /mnt/c/Users/aygul/Desktop/agents; set -euo pipefail; bash -n scripts/build-trusted-image.sh scripts/install-supply-chain-tools.sh; PYTHONDONTWRITEBYTECODE=1 /home/aygul/.venvs/nemo-agents/bin/python -m pytest -q tests/test_trusted_image.py tests/test_trusted_image_release.py tests/test_mssql_client.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: test owned SQL query controller",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_mssql_owned_query.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_adapters.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_mssql_client.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: retest owned SQL query controller",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_mssql_owned_query.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_adapters.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_mssql_client.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: test query operation semantics",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_adapters.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_trusted_workflow.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: validate SQL runtime wiring",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_trusted_runtime.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_mssql_owned_query.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: test deployed SQL runtime",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_trusted_runtime.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_mssql_owned_query.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_adapters.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: retest deployed SQL runtime",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_trusted_runtime.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_mssql_owned_query.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_adapters.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: compile SQL-backed workloads",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"cd /mnt/c/Users/aygul/Desktop/agents; set -euo pipefail; PYTHONPYCACHEPREFIX=/tmp/learningnemo-workload-pycache python3 -m py_compile infra/next-phase/workload_parameters.py; az bicep build --file infra/next-phase/workloads.bicep --stdout >/tmp/learningnemo-workloads.json; python3 -m json.tool /tmp/learningnemo-workloads.json >/dev/null; rm -f /tmp/learningnemo-workloads.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: recompile SQL-backed workloads",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"cd /mnt/c/Users/aygul/Desktop/agents; set -euo pipefail; az bicep build --file infra/next-phase/workloads.bicep --stdout >/tmp/learningnemo-workloads.json; python3 -m json.tool /tmp/learningnemo-workloads.json >/dev/null; rm -f /tmp/learningnemo-workloads.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: validate compiled SQL workers",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"cd /mnt/c/Users/aygul/Desktop/agents; set -euo pipefail; az bicep build --file infra/next-phase/workloads.bicep --stdout >/tmp/learningnemo-workloads.json; python3 infra/next-phase/validate-workloads.py /tmp/learningnemo-workloads.json; rm -f /tmp/learningnemo-workloads.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: test SQL-backed workload IaC",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_next_phase_workload_infra.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: retest workload materialization",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_next_phase_workload_infra.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: test workload orchestration",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"cd /mnt/c/Users/aygul/Desktop/agents; set -euo pipefail; bash -n infra/next-phase/deploy-workloads.sh; PYTHONPYCACHEPREFIX=/tmp/learningnemo-workload-pycache python3 -m py_compile infra/next-phase/preflight_workloads.py infra/next-phase/verify_workloads.py infra/next-phase/workload_parameters.py; PYTHONDONTWRITEBYTECODE=1 /home/aygul/.venvs/nemo-agents/bin/python -m pytest -q tests/test_next_phase_workload_infra.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: test migration receipt verification",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_mssql_client.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_migrations.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_migration_infra.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: inspect Container Apps job CLI",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"containerapp",
+				"job",
+				"execution",
+				"--help"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: inspect Container Apps job start CLI",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"containerapp",
+				"job",
+				"start",
+				"--help"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: inspect job execution show CLI",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"containerapp",
+				"job",
+				"execution",
+				"show",
+				"--help"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: validate migration lifecycle",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"cd /mnt/c/Users/aygul/Desktop/agents; set -euo pipefail; PYTHONPYCACHEPREFIX=/tmp/learningnemo-migration-pycache python3 -m py_compile infra/next-phase/migration_contract.py infra/next-phase/preflight_migration.py infra/next-phase/verify_migration.py; az bicep build --file infra/next-phase/migration-stack.bicep --stdout >/tmp/learningnemo-migration.json; python3 infra/next-phase/validate-migration.py /tmp/learningnemo-migration.json; rm -f /tmp/learningnemo-migration.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: revalidate migration lifecycle",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"cd /mnt/c/Users/aygul/Desktop/agents; set -euo pipefail; PYTHONPYCACHEPREFIX=/tmp/learningnemo-migration-pycache python3 -m py_compile infra/next-phase/migration_contract.py infra/next-phase/preflight_migration.py infra/next-phase/verify_migration.py; az bicep build --file infra/next-phase/migration-stack.bicep --stdout >/tmp/learningnemo-migration.json; python3 infra/next-phase/validate-migration.py /tmp/learningnemo-migration.json; rm -f /tmp/learningnemo-migration.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: test migration deployment workflow",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/test-migration.sh"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: preview artifact registry",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"-lc",
+				"set -euo pipefail; export AZURE_SUBSCRIPTION_ID=\"$(az account show --query id --output tsv)\"; bash /mnt/c/Users/aygul/Desktop/agents/infra/next-phase/deploy-artifacts.sh --what-if --ttl-hours 8"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: inspect mssql execute signature",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-c",
+				"import inspect,mssql_python; c=mssql_python.connect; print(inspect.signature(c)); from mssql_python import dbapi; print(inspect.signature(dbapi.Cursor.execute))"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: inspect cursor execute signature",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-c",
+				"import inspect; from mssql_python.cursor import Cursor; print(inspect.signature(Cursor.execute)); print(inspect.signature(Cursor.executemany))"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: test actual SQL parameter API",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONDONTWRITEBYTECODE=1",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"-q",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_mssql_client.py",
+				"/mnt/c/Users/aygul/Desktop/agents/tests/test_sql_adapters.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: validate source revision",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONPATH=/mnt/c/Users/aygul/Desktop/agents/infra/next-phase",
+				"python3",
+				"-c",
+				"from pathlib import Path; from trusted_image_release import source_revision; value=source_revision(Path('/mnt/c/Users/aygul/Desktop/agents')); print(len(value), value.isascii(), value.isalnum())"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: validate source revision 2",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONPATH=/mnt/c/Users/aygul/Desktop/agents/infra/next-phase",
+				"python3",
+				"-c",
+				"import sys; from pathlib import Path; from trusted_image_release import source_revision; value=source_revision(Path(sys.argv[1])); print(len(value), value.isascii(), value.isalnum())",
+				"/mnt/c/Users/aygul/Desktop/agents"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: count trusted image findings",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONPATH=/mnt/c/Users/aygul/Desktop/agents/infra/next-phase",
+				"python3",
+				"-c",
+				"import sys; from pathlib import Path; from trusted_image_release import vulnerability_counts; print(vulnerability_counts(Path(sys.argv[1])))",
+				"/home/aygul/.local/state/learningnemo/trusted-runtime-dev.scan.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: resolve Python 3.14 build digest",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.local/share/learningnemo/bin/crane",
+				"digest",
+				"docker.io/library/python:3.14.7-slim-trixie"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: resolve Chainguard runtime digest",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.local/share/learningnemo/bin/crane",
+				"digest",
+				"cgr.dev/chainguard/python:latest"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "LearningNeMo: verify final scan counts",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"PYTHONPATH=/mnt/c/Users/aygul/Desktop/agents/infra/next-phase",
+				"python3",
+				"-c",
+				"import sys; from pathlib import Path; from trusted_image_release import vulnerability_counts; print(vulnerability_counts(Path(sys.argv[1])))",
+				"/home/aygul/.local/state/learningnemo/trusted-runtime-dev.scan.json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: inspect runtime operation state",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"operation",
+				"group",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-platform-dev",
+				"--name",
+				"learningnemo-runtime-envelope-dev",
+				"--query",
+				"[].{type:properties.targetResource.resourceType,state:properties.provisioningState}",
+				"--output",
+				"json"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: runtime operation types",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"operation",
+				"group",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-platform-dev",
+				"--name",
+				"learningnemo-runtime-envelope-dev",
+				"--query",
+				"[].properties.targetResource.resourceType",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: runtime operation states",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"operation",
+				"group",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-platform-dev",
+				"--name",
+				"learningnemo-runtime-envelope-dev",
+				"--query",
+				"[].properties.provisioningState",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: run all local IaC gates",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/test-all-local.sh"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: retest foundation gate",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/next-phase/test-foundation.sh"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: rerun all local IaC gates",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"bash",
+				"/mnt/c/Users/aygul/Desktop/agents/infra/test-all-local.sh"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: runtime deployment duration",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"group",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-platform-dev",
+				"--name",
+				"learningnemo-runtime-envelope-dev",
+				"--query",
+				"properties.duration",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: runtime operation status code",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"operation",
+				"group",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-platform-dev",
+				"--name",
+				"learningnemo-runtime-envelope-dev",
+				"--query",
+				"[0].properties.statusCode",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: runtime deployment state now",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"group",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-platform-dev",
+				"--name",
+				"learningnemo-runtime-envelope-dev",
+				"--query",
+				"properties.provisioningState",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: runtime deployment duration now",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"group",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-platform-dev",
+				"--name",
+				"learningnemo-runtime-envelope-dev",
+				"--query",
+				"properties.duration",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: check runtime completion",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"group",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-platform-dev",
+				"--name",
+				"learningnemo-runtime-envelope-dev",
+				"--query",
+				"properties.provisioningState",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: runtime state",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"group",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-platform-dev",
+				"--name",
+				"learningnemo-runtime-envelope-dev",
+				"--query",
+				"properties.provisioningState",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: runtime duration",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"group",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-platform-dev",
+				"--name",
+				"learningnemo-runtime-envelope-dev",
+				"--query",
+				"properties.duration",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: environment count",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"resource",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-platform-dev",
+				"--resource-type",
+				"Microsoft.App/managedEnvironments",
+				"--query",
+				"length(@)",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: inspect environment region",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"resource",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-platform-dev",
+				"--name",
+				"cae-learningnemo-dev",
+				"--resource-type",
+				"Microsoft.App/managedEnvironments",
+				"--api-version",
+				"2026-01-01",
+				"--query",
+				"location",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: migration nested states",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"group",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-migration-dev",
+				"--query",
+				"[].properties.provisioningState",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: migration nested count",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"group",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-migration-dev",
+				"--query",
+				"length([])",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: migration nested error code",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"group",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-migration-dev",
+				"--name",
+				"learningnemo-sql-migration-dev",
+				"--query",
+				"properties.error.code",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: migration nested operation code",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"operation",
+				"group",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-migration-dev",
+				"--name",
+				"learningnemo-sql-migration-dev",
+				"--query",
+				"[].properties.statusMessage.error.code",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: migration nested operation type",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"operation",
+				"group",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-migration-dev",
+				"--name",
+				"learningnemo-sql-migration-dev",
+				"--query",
+				"[].properties.targetResource.resourceType",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: migration identity scope state",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"identity",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-data-dev",
+				"--name",
+				"id-learningnemo-sql-admin-dev",
+				"--query",
+				"isolationScope",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: migration deployment state now",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"sub",
+				"show",
+				"--name",
+				"learningnemo-sql-migration-dev",
+				"--query",
+				"properties.provisioningState",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: migration resource types now",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"resource",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-migration-dev",
+				"--query",
+				"[].type",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: migration execution status",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"containerapp",
+				"job",
+				"execution",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-migration-dev",
+				"--name",
+				"caj-learningnemo-migrate-dev",
+				"--query",
+				"[].properties.status",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: migration execution count",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"containerapp",
+				"job",
+				"execution",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-migration-dev",
+				"--name",
+				"caj-learningnemo-migrate-dev",
+				"--query",
+				"length(@)",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: restored identity scope",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"identity",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-data-dev",
+				"--name",
+				"id-learningnemo-sql-admin-dev",
+				"--query",
+				"isolationScope",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: migration group cleanup state",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"group",
+				"exists",
+				"--name",
+				"rg-learningnemo-migration-dev",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: post-timeout identity scope",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"identity",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-data-dev",
+				"--name",
+				"id-learningnemo-sql-admin-dev",
+				"--query",
+				"isolationScope",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: post-timeout migration group",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"group",
+				"exists",
+				"--name",
+				"rg-learningnemo-migration-dev",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: migration group provisioning state",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"group",
+				"show",
+				"--name",
+				"rg-learningnemo-migration-dev",
+				"--query",
+				"properties.provisioningState",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: recovery identity scope final",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"identity",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-data-dev",
+				"--name",
+				"id-learningnemo-sql-admin-dev",
+				"--query",
+				"isolationScope",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: recovery migration group final",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"group",
+				"exists",
+				"--name",
+				"rg-learningnemo-migration-dev",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: identity restored after failure",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"identity",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-data-dev",
+				"--name",
+				"id-learningnemo-sql-admin-dev",
+				"--query",
+				"isolationScope",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: retry execution status",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"containerapp",
+				"job",
+				"execution",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-migration-dev",
+				"--name",
+				"caj-learningnemo-migrate-dev",
+				"--query",
+				"[].properties.status",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: retry identity scope",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"identity",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-data-dev",
+				"--name",
+				"id-learningnemo-sql-admin-dev",
+				"--query",
+				"isolationScope",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: retry outer deployment state",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"sub",
+				"show",
+				"--name",
+				"learningnemo-sql-migration-dev",
+				"--query",
+				"properties.provisioningState",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: retry nested deployment state",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"group",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-migration-dev",
+				"--name",
+				"learningnemo-sql-migration-dev",
+				"--query",
+				"properties.provisioningState",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: retry nested error code",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"operation",
+				"group",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-migration-dev",
+				"--name",
+				"learningnemo-sql-migration-dev",
+				"--query",
+				"[].properties.statusMessage.error.code",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: retry job resource count",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"resource",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-migration-dev",
+				"--resource-type",
+				"Microsoft.App/jobs",
+				"--query",
+				"[].properties.provisioningState",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: retry deployment duration",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"sub",
+				"show",
+				"--name",
+				"learningnemo-sql-migration-dev",
+				"--query",
+				"properties.duration",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: retry outer state 2",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"deployment",
+				"sub",
+				"show",
+				"--name",
+				"learningnemo-sql-migration-dev",
+				"--query",
+				"properties.provisioningState",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: retry job state 2",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"resource",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-migration-dev",
+				"--resource-type",
+				"Microsoft.App/jobs",
+				"--query",
+				"[].properties.provisioningState",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: diagnostic execution status",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"containerapp",
+				"job",
+				"execution",
+				"list",
+				"--resource-group",
+				"rg-learningnemo-migration-dev",
+				"--name",
+				"caj-learningnemo-migrate-dev",
+				"--query",
+				"[].properties.status",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: retry cleanup group state",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"group",
+				"exists",
+				"--name",
+				"rg-learningnemo-migration-dev",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: retry restoration scope",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"identity",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-data-dev",
+				"--name",
+				"id-learningnemo-sql-admin-dev",
+				"--query",
+				"isolationScope",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: second recovery identity",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"identity",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-data-dev",
+				"--name",
+				"id-learningnemo-sql-admin-dev",
+				"--query",
+				"isolationScope",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: second recovery group",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"group",
+				"exists",
+				"--name",
+				"rg-learningnemo-migration-dev",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: second retry scope restored",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"identity",
+				"show",
+				"--resource-group",
+				"rg-learningnemo-data-dev",
+				"--name",
+				"id-learningnemo-sql-admin-dev",
+				"--query",
+				"isolationScope",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: second retry group removed",
+			"type": "shell",
+			"command": "wsl",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"group",
+				"exists",
+				"--name",
+				"rg-learningnemo-migration-dev",
+				"--output",
+				"tsv"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "LearningNeMo: inspect VM startup",
+			"type": "process",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"vm",
+				"get-instance-view",
+				"-g",
+				"rg-learningnemo-saw-dev",
+				"-n",
+				"vm-learningnemo-saw-dev",
+				"--query",
+				"instanceView",
+				"-o",
+				"json"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: read boot console",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"vm",
+				"boot-diagnostics",
+				"get-boot-log",
+				"-g",
+				"rg-learningnemo-saw-dev",
+				"-n",
+				"vm-learningnemo-saw-dev"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: retain resources for testing",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"python3",
+				"infra/next-phase/retention.py",
+				"hold"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: inspect installed agent schema",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"grep",
+				"-R",
+				"-n",
+				"ChatCompletionRequest",
+				"/home/aygul/.venvs/nemo-agents/lib/python3.12/site-packages/nat/front_ends/fastapi"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: build guided demo release",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=cloud-demo-build",
+				"bash",
+				"scripts/build-cloud-demo.sh",
+				"all"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: gateway diagnostic tests",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"-m",
+				"pytest",
+				"tests/test_gateway_diagnosis.py",
+				"tests/test_read_only_agent_check.py",
+				"-q"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: classify gateway failure",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"scripts/diagnose-agent-gateway.py"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: validate guardrail credential resolution",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"/home/aygul/.venvs/nemo-agents/bin/python",
+				"scripts/validate-agent-config.py"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: inspect middleware handoff",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"grep",
+				"-R",
+				"-n",
+				"model_dump",
+				"/home/aygul/.venvs/nemo-agents/lib/python3.12/site-packages/nat/builder"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: inspect served config serialization",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"grep",
+				"-R",
+				"-n",
+				"model_dump",
+				"/home/aygul/.venvs/nemo-agents/lib/python3.12/site-packages/nat/front_ends/fastapi"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: inspect release builds",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"az",
+				"acr",
+				"task",
+				"list-runs",
+				"--registry",
+				"crlearningnemodevgruyrc4qwdvvm",
+				"--top",
+				"2",
+				"--query",
+				"[].status",
+				"-o",
+				"json"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: verify retained cloud release",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"python3",
+				"infra/next-phase/verify-cloud-demo.py",
+				"--parameters",
+				"/home/aygul/.local/state/learningnemo/cloud-demo.parameters.json",
+				"--output",
+				"/home/aygul/.local/state/learningnemo/cloud-demo.verified.json"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: prepare retained human services",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=human-handoff",
+				"python3",
+				"infra/next-phase/deploy_human_services.py",
+				"prepare"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: renew retained human APIs",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=human-handoff",
+				"python3",
+				"infra/next-phase/deploy_human_services.py",
+				"services"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: build incident initiation",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=cloud-demo-build",
+				"bash",
+				"scripts/build-cloud-demo.sh",
+				"human"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: authorize incident workers",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=incident-worker-access",
+				"python3",
+				"infra/next-phase/configure_incident_workers.py"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: prepare incident initiation",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=human-handoff",
+				"python3",
+				"infra/next-phase/deploy_human_services.py",
+				"prepare"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: migrate incident initiation",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=human-handoff",
+				"python3",
+				"infra/next-phase/deploy_human_services.py",
+				"migrate"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: verify initiation migration",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=human-handoff",
+				"python3",
+				"infra/next-phase/deploy_human_services.py",
+				"verify-migration"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: retire initiation migration authority",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=human-handoff",
+				"python3",
+				"infra/next-phase/deploy_human_services.py",
+				"cleanup-migration"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "LearningNeMo: deploy incident initiation API",
+			"type": "shell",
+			"command": "wsl.exe",
+			"args": [
+				"-d",
+				"Ubuntu-24.04",
+				"--",
+				"env",
+				"AZURE_SUBSCRIPTION_ID=40dbf703-f68a-4ca1-b315-c37f3308c38b",
+				"LEARNINGNEMO_AZURE_APPLY=human-handoff",
+				"python3",
+				"infra/next-phase/deploy_human_services.py",
+				"services"
+			],
+			"problemMatcher": []
+		}
+	]
+}

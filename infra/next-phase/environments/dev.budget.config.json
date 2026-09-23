@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "location": "eastus",
+  "environment": "dev",
+  "budgetName": "budget-learningnemo-dev",
+  "monthlyAmount": 50
+}

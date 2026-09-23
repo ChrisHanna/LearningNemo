@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "build": "docker.io/library/python:3.14.7-slim-trixie@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6",
+  "nativeBuild": "cgr.dev/chainguard/gcc-glibc:latest-dev@sha256:ff11ca909cc8cadddf272620355656c1249f579b73c4768086e98d4a4ff452fc",
+  "runtime": "mcr.microsoft.com/azurelinux/distroless/base:3.0@sha256:0198b6345e0aeffd6c2e455ebc4c74b1d644ac1dfcb5aa5236972f17fd281f27"
+}
