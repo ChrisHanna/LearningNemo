@@ -1,8 +1,23 @@
 # Cloud-Hosted Demo
 
-This deployment moves the dashboard, its fixed workspace controller, and the
-existing NeMo task API into Azure. It does not move an operator's Azure CLI
-profile, SSH key, or provider API key into the dashboard image.
+This project's core purpose is demonstrating OpenShell sandboxes and
+per-sandbox MicroVM isolation inside the Secure Agent Workspace (SAW); see the
+[root README](../README.md#why-openshell-and-microvms-matter) and
+[ADR 0001](decisions/0001-openshell-microvm-driver.md) for that architecture.
+This guide covers the supporting cloud deployment: it moves the dashboard, its
+fixed workspace controller, and the existing NeMo task API into Azure so the
+sandbox demonstration and its supporting services are reachable without a
+running local console. It does not move an operator's Azure CLI profile, SSH
+key, or provider API key into the dashboard image.
+
+The cloud workspace controller described below is a trusted Azure service that
+calls into the SAW/OpenShell sandbox lifecycle; the existing NeMo task API is a
+separate cloud service and is not itself agent code running inside a sandbox,
+and not all cloud workflows covered here execute inside a MicroVM. Where a
+separate invoice-agent integration runs Planning/Execution agents inside their
+own OpenShell MicroVMs, see the [governed invoice incident demo](invoice-demo.md)
+for that distinct, dated workflow — do not treat it as the same thing as the
+fixed workspace-controller proof described here.
 
 ## Runtime Boundaries
 

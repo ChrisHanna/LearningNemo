@@ -1,9 +1,84 @@
-# LearningNeMo
+# LearningNeMo — OpenShell Sandboxes and MicroVM Isolation
 
-LearningNeMo is a security-focused NVIDIA NeMo Agent Toolkit demonstration. It
-lets two Microsoft Entra users try the same task agent with different
-permissions: a Reader can inspect tasks, while an Operator can execute them.
-The walkthrough below takes you from a fresh clone to that local demo.
+LearningNeMo explores how to run NVIDIA NeMo agents inside constrained,
+disposable environments using **NVIDIA OpenShell**, **per-sandbox MicroVM
+isolation**, and an Azure-hosted **Secure Agent Workspace (SAW)**. NeMo
+supplies the agent framework; OpenShell and the workspace architecture define
+where agent code runs and what it is permitted to do. The dashboard, Entra
+authorization exercises, and trusted SQL services exist to support that
+sandbox demonstration, not the other way around.
+
+The central question is not only "will the model follow instructions?" but
+"what can the agent actually reach or change — even when it does not follow
+instructions?"
+
+## Why OpenShell and MicroVMs Matter
+
+The workspace design separates several complementary boundaries. See
+[ADR 0001](docs/decisions/0001-openshell-microvm-driver.md) for the full
+rationale and its recorded constraints.
+
+- **The SAW host.** A private, no-public-IP Azure VM is the outer, single-user
+  workspace boundary. It has its own bounded lease/lifecycle, independent of
+  any sandbox running inside it.
+- **OpenShell policy boundaries.** Planning, Execution, and Probe each run
+  under a distinct, immutable OpenShell policy that constrains their
+  permitted operations and network routes. Planning and Execution are
+  deliberately kept separate so that a planning step cannot itself execute a
+  mutation.
+- **Per-sandbox MicroVMs.** This repository selects OpenShell's bundled
+  KVM-backed MicroVM driver with a fixed 1-vCPU/1-GiB allocation per sandbox,
+  giving each sandbox its own virtual-machine boundary inside the SAW host
+  rather than relying on container isolation alone. This choice depends on
+  Azure nested virtualization and `/dev/kvm`; it is a decision made for this
+  repository's proof of concept, not a universal claim about how every
+  OpenShell deployment must be configured.
+- **Trusted services authorize mutations, not the sandbox.** A sandbox, a
+  model response, or mere possession of a running MicroVM does not itself
+  authorize a protected change. Approval and database authority stay with
+  separately identified, trusted services; Probe sandboxes exist to test
+  policy boundaries, not to perform authorized work.
+
+This is a single-user runtime portfolio proof of concept, not a hardened,
+multi-tenant production SAW fleet. See the architecture and evidence links
+below for what is designed, what is implemented, what is configured policy,
+what has been probed and recorded on a given date, and what remains
+unverified end-to-end.
+
+## Architecture and Sandbox Documentation
+
+- [SAW and OpenShell specification](docs/next-phase-saw-openshell-spec.md) —
+  design intent and phased acceptance criteria for the full workspace.
+- [ADR 0001: OpenShell MicroVM driver](docs/decisions/0001-openshell-microvm-driver.md) —
+  why this repository selects OpenShell's bundled MicroVM driver, KVM, and
+  fixed per-sandbox sizing.
+- [Build and reproduce the workspace](docs/build-and-reproduce.md) — operator
+  build guide for the SAW/OpenShell infrastructure.
+- [Capability demonstration runbook](docs/capability-demo.md) — the
+  sandbox-focused demonstration story and its evidence.
+- [OpenShell bootstrap diagnostic record](docs/openshell-bootstrap-diagnostic-record.md) —
+  a dated, recorded live diagnosis of the OpenShell bootstrap, not a live
+  health status.
+- [Governed invoice incident demo](docs/invoice-demo.md) — the current,
+  dated workflow guide for the Planning/Execution agents that run inside
+  separate OpenShell MicroVMs, with its own explicit evidence boundaries.
+
+**Evidence boundary:** design intent, an implemented control, a configured
+policy, a dated recorded probe, present live health, and a fully accepted
+human/agent end-to-end run are different claims. A recorded probe from an
+earlier date is not current live health, and a running dashboard is not proof
+that the sandboxed workflow itself succeeded. Consult the linked documents for
+their own dated evidence and acceptance criteria rather than assuming this
+README's summary is the latest status.
+
+## Supporting Exercise: Local Task Authorization
+
+The walkthrough below is a **local, offline-friendly authorization exercise**
+that predates and supports the sandbox work above — it is not the OpenShell
+sandbox demonstration itself. It lets two Microsoft Entra users try the same
+task agent with different permissions: a Reader can inspect tasks, while an
+Operator can execute them. Use it to validate Entra roles and the local
+agent/console before moving on to the sandbox architecture and cloud demo.
 
 > **Choose the path that matches your goal**
 >
@@ -13,10 +88,11 @@ The walkthrough below takes you from a fresh clone to that local demo.
 > - **The local agent and console** run on your machine, but they are *not*
 >   offline: sign-in needs Entra, and agent/guardrail model requests need the
 >   configured APIM gateway and model-provider access.
-> - **Cloud and SAW/OpenShell work** is optional, advanced infrastructure. See
->   the [cloud demo guide](docs/cloud-demo.md) and
->   [build and reproduction guide](docs/build-and-reproduce.md); it is not
->   required for the first task-authorization demo.
+> - **Cloud, SAW, and OpenShell work** is where the sandbox architecture
+>   actually runs. See the [cloud demo guide](docs/cloud-demo.md) and
+>   [build and reproduction guide](docs/build-and-reproduce.md). It requires
+>   Azure resources and is not needed to complete the local authorization
+>   exercise below.
 
 ## Before you start
 
@@ -280,13 +356,17 @@ The source and deeper operational material remain available:
 - [Build and reproduction guide](docs/build-and-reproduce.md)
 - [Capability demonstration runbook](docs/capability-demo.md)
 - [Cloud demo guide](docs/cloud-demo.md)
+- [Governed invoice incident demo](docs/invoice-demo.md)
 - [Approver account guide](docs/approver-account.md)
 - [Human handoff checkpoint](docs/human-handoff-live-checkpoint.md)
 - [Next-phase SAW/OpenShell specification](docs/next-phase-saw-openshell-spec.md)
 - [SAW/OpenShell diagnostic record](docs/openshell-bootstrap-diagnostic-record.md)
 
-Historical SAW/OpenShell evidence is not current cloud health. The recorded
-probes do not establish a complete live end-to-end incident integration:
-approved runtime connectivity, clean-host reproducibility, and the full
-sandbox-to-incident flow remain unfinished. See the linked guides for the
-current boundaries and acceptance criteria.
+Historical SAW/OpenShell evidence is not current cloud health, and the status
+of one workflow does not carry over to another. The bootstrap diagnostic
+record's earlier connectivity findings do not automatically apply to later,
+separately dated work such as the invoice demo above, and a later dated record
+does not retroactively resolve a different, still-open gap elsewhere. Each
+linked guide states its own dated evidence boundaries; check the specific guide
+for the workflow you care about rather than assuming one status applies to all
+of them.
