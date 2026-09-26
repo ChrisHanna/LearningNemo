@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -12,6 +13,16 @@ from task_agent.control.invoice_repository import capability_context, new_capabi
 from task_agent.control.operations import OperationDeniedError
 from task_agent.control.sql_backend import SqlProcedureUnavailableError
 
+
+
+def run_authority(run_id, prepared):
+    """Mint the run capability here, or accept the hash of one an OpenShell provider holds on the host."""
+    if 'capability_hash' in prepared:
+        if not re.fullmatch(r'[a-f0-9]{64}', str(prepared['capability_hash'])):
+            raise OperationDeniedError('provider-held run capability hash is malformed')
+        return None, prepared['capability_hash']
+    capability = new_capability(run_id)
+    return capability, capability_context(capability)[1]
 
 class InvoiceController:
     def __init__(self, *, admission_client, incident_repository, verifier_repository, runtime, audit, clock=lambda: datetime.now(UTC), observer=None, sandbox_probe=None, maintenance=None):
@@ -118,8 +129,7 @@ class InvoiceController:
             admission_attempted = False
             result = None
             try:
-                capability = new_capability(run_id)
-                _, digest = capability_context(capability)
+                capability, digest = run_authority(run_id, prepared)
                 expiry = self.clock() + timedelta(minutes=8)
                 admission_attempted = True
                 rows = await self.admission.call('control.usp_register_invoice_planning', dict(run_id=run_id, scenario_id=scenario_id,
@@ -185,8 +195,7 @@ class InvoiceController:
             try:
                 if prepared['sandbox_id'] == plan.planning_sandbox_id:
                     raise OperationDeniedError('execution reused Planning sandbox')
-                capability = new_capability(run_id)
-                _, digest = capability_context(capability)
+                capability, digest = run_authority(run_id, prepared)
                 admission_attempted = True
                 rows = await self.admission.call('control.usp_claim_invoice_execution', dict(plan_id=plan_id, plan_hash=plan_hash,
                     sponsor_hash=sponsor_hash, run_id=run_id, sandbox_id=prepared['sandbox_id'],

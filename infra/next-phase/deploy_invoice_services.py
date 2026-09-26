@@ -58,6 +58,8 @@ def prepare():
     registry=az('acr','show','-g','rg-learningnemo-artifacts-dev','-n','crlearningnemodevgruyrc4qwdvvm')
     network=az('group','show','-n','rg-learningnemo-data-network-dev')
     availability_mode=dependency_mode((environment,registry,network))
+    credential_mode=os.environ.get('LEARNINGNEMO_INVOICE_CREDENTIAL_MODE','manifest')
+    if credential_mode not in ('manifest','provider'): raise ValueError('run credential mode must be manifest or provider')
     expiry=None if availability_mode=='operator-managed' else min(datetime.now(UTC)+timedelta(minutes=100),*[datetime.fromisoformat(item['tags']['expiresAt'].replace('Z','+00:00')) for item in (environment,registry,network)])
     if expiry is not None and expiry<=datetime.now(UTC)+timedelta(minutes=30): raise ValueError('renew dependency leases before invoice deployment')
     if any(item['tags'].get('owner')!='learningnemo-portfolio' for item in (environment,registry,network)): raise ValueError('dependency ownership mismatch')
@@ -69,7 +71,7 @@ def prepare():
     for value,repository in ((image,'invoice-services'),(agent_image,'invoice-agent')):
         if not re.fullmatch(re.escape(registry['loginServer']+'/learningnemo/'+repository)+r'@sha256:[a-f0-9]{64}',value): raise ValueError('owned pinned image required')
     values=dict(location='eastus',environmentId=environment['id'],registryServer=registry['loginServer'],image=image,agentImage=agent_image,
-        expiresAt=expiry.isoformat() if expiry else '',availabilityMode=availability_mode,tenantId=settings['ENTRA_TENANT_ID'],apiClientId=settings['ENTRA_CLIENT_ID'],publicClientId=settings['ENTRA_PUBLIC_CLIENT_ID'],
+        expiresAt=expiry.isoformat() if expiry else '',availabilityMode=availability_mode,credentialMode=credential_mode,tenantId=settings['ENTRA_TENANT_ID'],apiClientId=settings['ENTRA_CLIENT_ID'],publicClientId=settings['ENTRA_PUBLIC_CLIENT_ID'],
         sqlServer=server['fullyQualifiedDomainName'],modelOrigin=env['OPENAI_BASE_URL'],guardrailOrigin=env['OPENAI_GUARDRAIL_BASE_URL'],subscriptionId=subscription,deployApps=False)
     if az('group','exists','-n',GROUP):
         if az('group','show','-n',GROUP).get('tags',{}).get('purpose')!='invoice-agent-workflow': raise ValueError('resource group collision')

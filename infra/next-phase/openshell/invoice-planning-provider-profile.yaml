@@ -1,0 +1,25 @@
+# Binds one run's capability to the invoice planning gateway. The sandbox sees only an
+# OpenShell placeholder; the proxy substitutes the real value in the Authorization header
+# for this host and path, and fails closed anywhere else.
+id: learningnemo-invoice-planning
+display_name: LearningNeMo invoice planning run capability
+description: Per-run capability for the invoice planning gateway, injected by the OpenShell proxy
+category: other
+credentials:
+  - name: run_capability
+    description: Short-lived, run-scoped invoice planning capability
+    env_vars: [INVOICE_RUN_CAPABILITY]
+    required: true
+    auth_style: bearer
+    header_name: authorization
+endpoints:
+  - host: ca-nemo-invoice-planning-dev.jollybeach-503c7ed1.eastus.azurecontainerapps.io
+    port: 443
+    path: /v2/invoice/**
+    protocol: rest
+    enforcement: enforce
+    rules:
+      - allow: { method: POST, path: /v2/invoice/tools/invoice_summary }
+      - allow: { method: POST, path: /v2/invoice/tools/invoice_batches }
+      - allow: { method: POST, path: /v2/invoice/inference/v1/chat/completions }
+binaries: [/usr/local/bin/python3.12]

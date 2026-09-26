@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 import json
 from pathlib import Path
 import re
+import textwrap
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
@@ -32,7 +33,59 @@ def cli(*args,timeout=300):
 '''
 
 
-def prepare_script(kind, run_id, image, policy, availability_mode='leased'):
+CAPABILITY_ENV = 'INVOICE_RUN_CAPABILITY'
+
+
+def provider_name(run_id):
+    return 'invoice-run-' + run_id
+
+
+def provider_block(kind, run_id, profile):
+    """Host code that mints the run capability into an OpenShell provider; only its hash leaves the VM."""
+    if profile.get('id') != 'learningnemo-invoice-' + kind:
+        raise ValueError('invoice provider profile differs from the run role')
+    encoded = base64.b64encode(json.dumps(profile, sort_keys=True).encode()).decode()
+    return f'''
+import hashlib,secrets
+provider={provider_name(run_id)!r}
+expected_profile=json.loads(base64.b64decode({encoded!r}))
+def binding(profile):
+    return ({{item['name']:sorted(item.get('env_vars') or []) for item in profile.get('credentials') or []}},
+            sorted((item.get('host'),item.get('port'),item.get('path')) for item in profile.get('endpoints') or []))
+def secret_cli(*args,secret,timeout=120):
+    result=subprocess.run(['runuser','-u','sawadmin','--','env',*[key+'='+value for key,value in environment.items()],'openshell','--gateway','openshell',*args],capture_output=True,text=True,timeout=timeout,env={{**os.environ,{CAPABILITY_ENV!r}:secret}})
+    if result.returncode: raise RuntimeError('fixed OpenShell credential operation failed')
+try:
+    current=json.loads(cli('provider','profile','export',expected_profile['id'],'-o','json'))
+except RuntimeError:
+    profile_file=policies/({run_id!r}+'-provider-profile.json')
+    with open(os.open(profile_file,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o644),'w') as output: json.dump(expected_profile,output)
+    os.chmod(profile_file,0o644)
+    cli('provider','profile','import','-f',str(profile_file))
+    current=json.loads(cli('provider','profile','export',expected_profile['id'],'-o','json'))
+assert binding(current)==binding(expected_profile), 'provider profile credential binding drift'
+capability={run_id!r}+'.'+secrets.token_urlsafe(32)
+capability_hash=hashlib.sha256(capability.encode('ascii')).hexdigest()
+secret_cli('provider','create','--name',provider,'--type',expected_profile['id'],'--credential',{CAPABILITY_ENV!r},secret=capability)
+del capability
+mediation={{'capability_hash':capability_hash,'provider':provider}}
+provider_arguments=['--provider',provider]
+'''
+
+
+def expire_provider_script(run_id):
+    """Host code that expires a stopped run's provider credential; absent providers were never minted."""
+    name = provider_name(run_id)
+    return f'''try:
+    cli('provider','update',{name!r},'--credential-expires-at',{CAPABILITY_ENV!r}+'=1')
+except RuntimeError:
+    try: cli('provider','get',{name!r})
+    except RuntimeError: pass
+    else: raise
+'''
+
+
+def prepare_script(kind, run_id, image, policy, availability_mode='leased', provider_profile=None):
     name = sandbox_name(kind, run_id)
     if availability_mode not in ('leased','operator-managed'):
         raise ValueError('explicit workspace availability mode required')
@@ -55,6 +108,7 @@ deadline=subprocess.check_output(['systemctl','show','learningnemo-saw-expire.ti
 deadline_seconds=int(subprocess.check_output(['date','-u','-d',deadline,'+%s'],text=True))
 assert deadline_seconds-int(__import__('time').time())>1260, 'workspace lease too short'
 '''
+    provider = textwrap.indent(provider_block(kind, run_id, provider_profile), '    ') if provider_profile is not None else ''
     return HOST_PREFIX + f'''
 name={name!r}
 {admission}
@@ -82,8 +136,11 @@ assert all(item['phase']=='Stopped' for item in inventory), 'another sandbox is 
 assert all(item['name']!=name for item in inventory)
 watchdog=subprocess.run(['runuser','-u','sawadmin','--','env',*[key+'='+value for key,value in environment.items()],'systemd-run','--user','--unit','invoice-provision-expire-'+{run_id!r},'--on-active','1200s','openshell','--gateway','openshell','sandbox','stop',name],capture_output=True,timeout=30)
 assert watchdog.returncode==0
+mediation={{}}
+provider_arguments=[]
 try:
-    cli('sandbox','create','--name',name,'--from',{image!r},'--policy',str(policy),'--detach','--','/bin/sleep','infinity',timeout=540)
+{provider}
+    cli('sandbox','create','--name',name,'--from',{image!r},'--policy',str(policy),*provider_arguments,'--detach','--','/bin/sleep','infinity',timeout=540)
     record=json.loads(cli('sandbox','get',name,'--output','json'))
     assert record['name']==name and record['phase']=='Ready'
     sandbox_id=str(uuid.UUID(record['id']))
@@ -119,22 +176,27 @@ try:
     with open(os.open(directory/'key.pem',os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600),'wb') as output:
         output.write(key.private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.PKCS8,serialization.NoEncryption()))
     public=key.public_key().public_bytes(serialization.Encoding.PEM,serialization.PublicFormat.SubjectPublicKeyInfo).decode()
-    print('INVOICE_PREPARED '+json.dumps({{'run_id':{run_id!r},'sandbox_id':uuid.UUID(record['id']).hex,'name':name,'policy':applied,'public_key':public,'image':{image!r}}}))
+    print('INVOICE_PREPARED '+json.dumps({{'run_id':{run_id!r},'sandbox_id':uuid.UUID(record['id']).hex,'name':name,'policy':applied,'public_key':public,'image':{image!r},**mediation}}))
 except Exception:
     try: cli('sandbox','stop',name)
     except Exception: pass
+    if mediation:
+        try: cli('provider','update',mediation['provider'],'--credential-expires-at',{CAPABILITY_ENV!r}+'=1')
+        except Exception: pass
     raise
 PY
 '''
 
 
 class AzureInvoiceRuntime:
-    def __init__(self, *, compute_client, image, policies, availability_mode='leased'):
+    def __init__(self, *, compute_client, image, policies, availability_mode='leased', credential_mode='manifest'):
         if not IMAGE.fullmatch(image):
             raise ValueError('fixed invoice image required')
         if availability_mode not in ('leased','operator-managed'):
             raise ValueError('explicit workspace availability mode required')
-        self.availability_mode = availability_mode
+        if credential_mode not in ('manifest','provider'):
+            raise ValueError('explicit run credential mode required')
+        self.availability_mode, self.credential_mode = availability_mode, credential_mode
         self.compute, self.image, self.policies = compute_client, image, Path(policies)
         self.prepared = {}
 
@@ -147,7 +209,8 @@ class AzureInvoiceRuntime:
     def prepare(self, kind, run_id, lease_seconds=600):
         import yaml
         policy = (self.policies / f'invoice-{kind}-policy.yaml').read_text()
-        result = self.command(prepare_script(kind,run_id,self.image,policy,self.availability_mode))
+        profile = yaml.safe_load((self.policies / f'invoice-{kind}-provider-profile.yaml').read_text()) if self.credential_mode == 'provider' else None
+        result = self.command(prepare_script(kind,run_id,self.image,policy,self.availability_mode,profile))
         records = [json.loads(line[len('INVOICE_PREPARED '):]) for line in result.splitlines() if line.startswith('INVOICE_PREPARED ')]
         blocked = [json.loads(line[len('INVOICE_ADMISSION_BLOCKED '):]) for line in result.splitlines() if line.startswith('INVOICE_ADMISSION_BLOCKED ')]
         if blocked:
@@ -163,14 +226,23 @@ class AzureInvoiceRuntime:
         if record['run_id']!=run_id or yaml.safe_load(record['policy'])!=yaml.safe_load(policy):
             self.stop(kind,run_id)
             raise RuntimeError('observed sandbox policy differs')
+        mediated = {'capability_hash','provider'} & set(record)
+        if self.credential_mode == 'provider':
+            if record.get('provider') != provider_name(run_id) or not re.fullmatch(r'[a-f0-9]{64}', str(record.get('capability_hash'))):
+                self.stop(kind,run_id)
+                raise RuntimeError('provider-held run capability unconfirmed')
+        elif mediated:
+            self.stop(kind,run_id)
+            raise RuntimeError('unexpected provider-held run capability')
         record['policy_hash']=content_hash(yaml.safe_load(policy))
         self.prepared[run_id]=record
-        return {key:record[key] for key in ('run_id','sandbox_id','policy_hash','name','image')}
+        return {key:record[key] for key in ('run_id','sandbox_id','policy_hash','name','image','capability_hash') if key in record}
 
     def stop(self, kind, run_id):
         name=sandbox_name(kind,run_id)
         expected = self.prepared.get(run_id, {}).get('sandbox_id')
-        result=self.command(HOST_PREFIX+f"cli('sandbox','stop',{name!r})\nrecord=json.loads(cli('sandbox','get',{name!r},'--output','json'))\nassert record['name']=={name!r} and record['phase']=='Stopped'\nassert {expected!r} is None or uuid.UUID(record['id']).hex=={expected!r}\npathlib.Path('/var/lib/learningnemo-invoice-cache/runs/{run_id}/key.pem').unlink(missing_ok=True)\nprint('INVOICE_STOPPED')\nPY\n")
+        revoke = expire_provider_script(run_id) if self.credential_mode == 'provider' else ''
+        result=self.command(HOST_PREFIX+f"cli('sandbox','stop',{name!r})\nrecord=json.loads(cli('sandbox','get',{name!r},'--output','json'))\nassert record['name']=={name!r} and record['phase']=='Stopped'\nassert {expected!r} is None or uuid.UUID(record['id']).hex=={expected!r}\npathlib.Path('/var/lib/learningnemo-invoice-cache/runs/{run_id}/key.pem').unlink(missing_ok=True)\n{revoke}print('INVOICE_STOPPED')\nPY\n")
         if 'INVOICE_STOPPED' not in result:
             raise RuntimeError('sandbox stop not confirmed')
 
@@ -178,7 +250,10 @@ class AzureInvoiceRuntime:
         record=self.prepared[manifest.run_id]
         if record['sandbox_id']!=manifest.sandbox_id:
             raise ValueError('remote sandbox identity differs')
-        private=manifest.model_dump(mode='json'); private['capability']=manifest.capability.get_secret_value()
+        if (manifest.capability is None) != (self.credential_mode == 'provider'):
+            raise ValueError('run credential mode differs from the manifest')
+        private=manifest.model_dump(mode='json')
+        if manifest.capability is not None: private['capability']=manifest.capability.get_secret_value()
         public=serialization.load_pem_public_key(record['public_key'].encode())
         key,nonce=AESGCM.generate_key(bit_length=256),__import__('os').urandom(12)
         wrapped=public.encrypt(key,padding.OAEP(mgf=padding.MGF1(hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
@@ -247,7 +322,7 @@ PY
                     if event.get('run_id')!=run_id or event.get('sandbox_id')!=manifest.sandbox_id or event.get('source')!='agent-runtime':
                         raise RuntimeError('agent transcript identity differs')
                     sequence+=1
-                    if event.get('sequence')!=sequence or sequence>100 or manifest.capability.get_secret_value() in line.decode():
+                    if event.get('sequence')!=sequence or sequence>100 or (manifest.capability is not None and manifest.capability.get_secret_value() in line.decode()):
                         raise RuntimeError('invalid or sensitive agent transcript suppressed')
                     await on_event({**event,'provenance':'sandbox-reported','delivery':'live-poll'})
                     if event.get('event_type')=='agent-finished':final=event
