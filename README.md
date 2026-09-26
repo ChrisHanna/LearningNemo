@@ -109,6 +109,31 @@ inside the VM:
   hard isolation between users or tenants needs a separate workspace VM
   (see the specification's cross-user isolation claim level).
 
+### NeMo Guardrails coverage
+
+[NeMo Guardrails](https://docs.nvidia.com/nemo/guardrails/latest/about-nemo-guardrails-library/rail-types)
+defines five rail types. Guardrails screen content; they are not an
+authorization boundary. Entra roles, OpenShell policy, and the SQL broker
+enforce what an agent can actually do.
+
+| Rail type | Invoice agent (website agent) | Task agent (local exercise) |
+| --- | --- | --- |
+| Input | `self check input` on user messages, tool results, and the approved plan's free text | Presidio PII masking, then a custom APIM semantic classifier |
+| Output | Regex secret detection, then `self check output` on the model's text and on `publish_decision` diagnosis, rationale, and risks | Regex secret detection and Presidio PII masking on the final response |
+| Execution: tool calls (`tool_output`) | One call per response, only the role's tools, arguments valid against the `InvoiceStep` / `PlanningDecision` contracts, step targets bound to the run's scenario, no secrets | Tool arguments checked for shell and SQL metacharacters before the tool runs |
+| Execution: tool results (`tool_input`) | Only results from the role's tools, bounded JSON, no secrets | Regex secret detection and Presidio PII masking before the model sees the result |
+| Dialog, retrieval | Not used | Not used |
+
+The invoice rails run in the trusted invoice gateway, outside the sandbox. The
+gateway buffers each model response and returns nothing until the output and
+execution rails pass, so a blocked response never reaches the agent; blocks
+are recorded as `tool-result-guardrail-denied` or `output-guardrail-denied`
+gateway events. `self check output` is an extra model call on responses that
+contain text. Contract validation, the exact-plan broker check, and SQL
+verification remain the authoritative controls. See
+[`control/invoice_rails.py`](src/task_agent/control/invoice_rails.py) and
+[`configs/agent.yml`](configs/agent.yml).
+
 ## Architecture and Sandbox Documentation
 
 - [SAW and OpenShell specification](docs/next-phase-saw-openshell-spec.md) —
@@ -411,7 +436,10 @@ and the [cloud demo guide](docs/cloud-demo.md).
 
 Every tool requires both its scope **and** role. The public client has no client
 secret. Local PII masking runs before the APIM semantic guardrail; unrecognized
-guardrail verdicts and transport failures stop the workflow. Task state is
+guardrail verdicts and transport failures stop the workflow. Each tool also
+passes through execution rails after its authorization check, and the final
+response passes through output rails (see
+[NeMo Guardrails coverage](#nemo-guardrails-coverage)). Task state is
 in-memory and intended only for this authorization demonstration.
 
 The source and deeper operational material remain available:

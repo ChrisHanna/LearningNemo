@@ -1011,6 +1011,24 @@ authorization boundary.
   no corresponding receipt exists.
 - Include evidence references rather than raw privileged output.
 
+### 18.4.1 Implementation Status
+
+Implemented for the invoice agent in the trusted invoice gateway
+(`src/task_agent/control/invoice_rails.py`) using NeMo Guardrails rail types:
+
+- **Output rails:** regex secret detection and `self check output` on
+  model-written text, including `publish_decision` narrative fields.
+- **Execution rails (`tool_output`):** registered tool names per role, one call
+  per response, strict contract validation of arguments, step targets bound to
+  the admitted scenario, and secret detection in arguments.
+- **Execution rails (`tool_input`):** tool results must come from a
+  role-permitted tool, be bounded JSON, and contain no secrets.
+
+The task agent applies output and execution rails through NAT guardrails
+middleware in `configs/agent.yml`. Claims of execution or completion are
+still enforced by receipts and the independent verifier, not by rails.
+Section 18.5's evaluation dataset is not yet implemented.
+
 ### 18.5 Evaluation
 
 The project MUST include an evaluation dataset containing allowed and denied

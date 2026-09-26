@@ -7,14 +7,17 @@ functions:
     _type: list_tasks
     middleware:
       - authorize_tasks_read
+      - tool_execution_rails
   execute_task:
     _type: execute_task
     middleware:
       - authorize_tasks_execute
+      - tool_execution_rails
   reset_tasks:
     _type: reset_tasks
     middleware:
       - authorize_tasks_execute
+      - tool_execution_rails
 
 authentication:
   entra_jwt:
@@ -59,6 +62,61 @@ middleware:
         config:
           sensitive_data_detection:
             input:
+              entities:
+                - PERSON
+                - EMAIL_ADDRESS
+                - PHONE_NUMBER
+  # Execution rails: tool arguments before the tool runs, tool results before the model sees them.
+  tool_execution_rails:
+    _type: guardrails
+    guardrails:
+      models: []
+      colang_version: "1.0"
+      rails:
+        input:
+          flows:
+            - regex check input
+        output:
+          flows:
+            - regex check output
+            - mask sensitive data on output
+        config:
+          regex_detection:
+            input:
+              patterns:
+                - '[;`$|<>]'
+                - '(?i)\b(select|insert|update|delete|drop|exec)\b\s'
+            output:
+              patterns: &secret_patterns
+                - '(?i)\bbearer\s+[a-z0-9._~+/=-]{16,}'
+                - '\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}'
+                - '(?i)\b(account ?key|shared ?access ?key|client[_ ]?secret|password|pwd)\s*[=:]'
+                - '-----BEGIN [A-Z ]*PRIVATE KEY-----'
+          sensitive_data_detection:
+            output:
+              entities:
+                - PERSON
+                - EMAIL_ADDRESS
+                - PHONE_NUMBER
+  # Output rails: the agent's final response before it is returned to the caller.
+  response_output_rails:
+    _type: guardrails
+    workflow_functions:
+      - "<workflow>"
+    guardrails:
+      models: []
+      colang_version: "1.0"
+      rails:
+        output:
+          flows:
+            - regex check output
+            - mask sensitive data on output
+        config:
+          regex_detection:
+            output:
+              patterns: *secret_patterns
+          sensitive_data_detection:
+            output:
               entities:
                 - PERSON
                 - EMAIL_ADDRESS
@@ -110,6 +168,7 @@ workflow:
     - authenticate_entra
     - local_input_sanitization
     - semantic_input_guardrails
+    - response_output_rails
   max_iterations: 2
   handle_tool_errors: false
   verbose: true

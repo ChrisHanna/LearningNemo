@@ -78,7 +78,8 @@ task_agent/
 | `invoice_agent.py` | NeMo tools and sandbox entry point for the invoice agent |
 | `invoice_controller.py`, `invoice_sandbox.py` | Sponsor-bound orchestration and host-side OpenShell lifecycle; Planning and Execution never share capabilities |
 | `invoice_contract.py`, `invoice_catalog.py`, `invoice_repository.py`, `invoice_jobs.py` | Closed invoice contracts, fixed SQL calls and grants, and at-most-once job claims |
-| `invoice_model.py` | Trusted APIM inference transport with NeMo input checks |
+| `invoice_model.py` | Trusted APIM inference transport; runs NeMo input rails, buffers each response, and runs output and execution rails before returning it |
+| `invoice_rails.py` | NeMo output and execution (`tool_output` / `tool_input`) rail flows, secret patterns, and contract checks for the invoice agent |
 | `invoice_activity.py`, `invoice_challenges.py`, `invoice_retention.py` | Activity metadata, fixed boundary probes, and retained-sandbox evidence checks |
 | `execution_sql_probe.py`, `invoice_sql_probe.py` | Rolled-back SQL rehearsals; never human evidence |
 
@@ -106,7 +107,8 @@ Browser console
   -> security/authorization.py
    -> local PII Guardrails middleware
    -> security/semantic_guardrail.py
-  -> tasks/tools.py
+   -> response output rails (on the final answer)
+  -> tasks/tools.py (behind authorization, then tool execution rails)
   -> tasks/store.py
 ```
 
