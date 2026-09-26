@@ -14,13 +14,34 @@ instructions?"
 
 ## Why OpenShell and MicroVMs Matter
 
-The workspace design separates several complementary boundaries. See
-[ADR 0001](docs/decisions/0001-openshell-microvm-driver.md) for the full
+In NVIDIA's
+[Secure Agent Workspace reference design](https://docs.nvidia.com/enterprise-reference-architectures/secure-agent-workspace-reference-design/latest/what-is-secure-agent-workspace.html),
+a SAW is not a single VM or product. It is the managed envelope around a
+single-user workspace VM: approved provisioning and lifecycle, brokered access,
+a runtime enforcement layer (OpenShell is NVIDIA's reference implementation),
+governed connectors with human review for sensitive writes, and audit.
+Containment nests from the inside out:
+
+```text
+agent loop -> OpenShell sandbox -> single-user workspace VM -> SAW envelope
+```
+
+NVIDIA groups SAW controls into three layers: baseline managed-workspace
+controls (the perimeter), runtime sandbox controls, and signed-policy
+governance (including a signed per-engagement delegation record). This
+repository implements parts of the first two layers; see
+[How this repository maps to the SAW reference design](#how-this-repository-maps-to-the-saw-reference-design).
+See [ADR 0001](docs/decisions/0001-openshell-microvm-driver.md) for the runtime
 rationale and its recorded constraints.
 
-- **The SAW host.** A private, no-public-IP Azure VM is the outer, single-user
-  workspace boundary. It has its own bounded lease/lifecycle, independent of
-  any sandbox running inside it.
+- **The workspace VM.** A private, no-public-IP Azure VM is the dedicated
+  workspace VM inside the SAW envelope. Here it hosts the website's agent
+  workload rather than a person's desktop (see
+  [Who the workspace is for](#who-the-workspace-is-for)). It has its own bounded
+  lease/lifecycle, owned by the trusted control plane and independent of any
+  sandbox running inside it. The VM alone is not the SAW; the lifecycle
+  control plane, network perimeter, trusted services, and audit around it are
+  part of the envelope.
 - **OpenShell policy boundaries.** Planning, Execution, and Probe each run
   under a distinct, immutable OpenShell policy that constrains their
   permitted operations and network routes. Planning and Execution are
@@ -28,8 +49,10 @@ rationale and its recorded constraints.
   mutation.
 - **Per-sandbox MicroVMs.** This repository selects OpenShell's bundled
   KVM-backed MicroVM driver with a fixed 1-vCPU/1-GiB allocation per sandbox,
-  giving each sandbox its own virtual-machine boundary inside the SAW host
-  rather than relying on container isolation alone. This choice depends on
+  giving each sandbox its own virtual-machine boundary inside the workspace VM
+  rather than relying on container isolation alone. NVIDIA's reference design
+  requires kernel-level runtime sandboxing, not MicroVMs specifically; the
+  MicroVM layer is an addition chosen here. This choice depends on
   Azure nested virtualization and `/dev/kvm`; it is a decision made for this
   repository's proof of concept, not a universal claim about how every
   OpenShell deployment must be configured.
@@ -44,6 +67,47 @@ multi-tenant production SAW fleet. See the architecture and evidence links
 below for what is designed, what is implemented, what is configured policy,
 what has been probed and recorded on a given date, and what remains
 unverified end-to-end.
+
+### How this repository maps to the SAW reference design
+
+| SAW reference-design element | This repository | Status |
+| --- | --- | --- |
+| Single-user workspace VM, approved image, managed lifecycle | Dedicated private Trusted Launch Azure VM for the website agent, pinned Ubuntu image, control-plane-owned start/stop. The invoice deployment runs it in `operator-managed` availability mode (no VM lease timer); per-run watchdogs and capabilities still expire | Implemented; see dated evidence |
+| Runtime sandbox layer (OpenShell) | Planning, Execution, and Probe sandboxes with distinct immutable policies, each in its own MicroVM | Implemented; policy/boundary probes recorded |
+| Separate sponsor, workspace, logical-agent, and runtime-agent identities | Entra human roles, AgentRunner logical identity, per-sandbox runtime capability | Designed; AgentRunner delegation integration partially pending |
+| Governed connectors with human review for sensitive writes | Capability-authenticated invoice tool gateways, SQL broker enforcing the exact approved plan, independent verifier, separate Approver | Implemented; sandbox Planning -> approval -> sandbox Execution -> verification recorded on 2026-09-16 with a synthetic reviewer, and the Approver UI validated on 2026-09-19 ([invoice demo](docs/invoice-demo.md)) |
+| Brokered interactive access (enterprise SSO) | Not yet implemented | Gap |
+| Runtime credential mediation | Model credential held by a trusted gateway; general OpenShell credential mediation not yet complete | Partial |
+| Workspace perimeter | NSGs plus OpenShell egress policy | Lower-cost substitute; not the reference design's Azure Firewall Premium perimeter |
+| Signed-policy governance and signed delegation record | The trusted-worker image is signed and attested; other images are digest-pinned only; sandbox policies and engagement delegations are not signed | Gap |
+| Kill switch outside the agent's control | Control-plane VM stop, per-run capability revocation, sandbox stop, and a root-owned admission gate (`/etc/learningnemo/invoice-availability.json`) | Partial; revocation is not yet bound to a signed delegation |
+
+Treat the "Gap" and "Partial" rows as reasons this repository claims a
+single-user OpenShell runtime POC rather than a complete SAW.
+
+### Who the workspace is for
+
+NVIDIA's reference design describes a SAW as a *single-user* workspace. This
+repository applies that to a **website-driven agent**, not to a person working
+inside the VM:
+
+- The website (dashboard, sign-in, approval, and trusted APIs) runs outside
+  the workspace in Azure Container Apps. Per the
+  [specification](docs/next-phase-saw-openshell-spec.md#62-do-not-use-saw-as-a-service-hosting-platform),
+  the SAW never hosts the website itself.
+- The workspace VM hosts only the agent runtime: the OpenShell gateway and the
+  Planning, Execution, and Probe sandboxes the website asks it to run.
+- "Single-user" is read as **one trust domain with one accountable owner**:
+  the operator who owns the engagement and its lease. Website users never
+  receive a shell, credentials, or network access to the VM; they reach the
+  agent only through authenticated website actions.
+- Because several website users can trigger runs in the same workspace VM,
+  isolation *between their runs* comes from separate, short-lived OpenShell
+  sandboxes and per-run capabilities, not from the VM. The invoice deployment
+  admits one active sandbox at a time and retains up to 24 stopped sandboxes
+  for evidence. Anything that requires
+  hard isolation between users or tenants needs a separate workspace VM
+  (see the specification's cross-user isolation claim level).
 
 ## Architecture and Sandbox Documentation
 

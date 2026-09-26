@@ -8,8 +8,8 @@
 | Audience | Implementers, security reviewers, and hiring reviewers |
 | Target environment | Microsoft Azure development subscription |
 | Primary scenario | Diagnose, contain, remediate, verify, and close a recursive-query incident |
-| Runtime model | One single-user SAW VM with multiple OpenShell sandboxes |
-| Current maturity | Pre-SAW application-security baseline |
+| Runtime model | One dedicated workspace VM for the website agent (one accountable owner) with multiple OpenShell sandboxes, inside the SAW envelope |
+| Current maturity | Single-user OpenShell runtime POC; SAW Phase I/II claims not yet met (see Section 12.2) |
 | Last reviewed | 2026-09-12 |
 
 ## 1. Purpose
@@ -44,7 +44,8 @@ LearningNeMo will use a hybrid Azure design:
 
 - Trusted APIs and deterministic services run in Azure Container Apps.
 - One Azure Linux VM is provisioned for one human Operator and one engagement.
-- The VM is the outer, single-user Secure Agent Workspace boundary.
+- The VM is the single-user workspace VM inside the Secure Agent Workspace
+  envelope; the control plane, perimeter, and audit around it complete the SAW.
 - One OpenShell gateway inside the VM manages multiple short-lived sandboxes.
 - AgentRunner performs diagnosis and planning in a Planning Sandbox.
 - An approved operation runs in a fresh Execution Sandbox.
@@ -106,7 +107,11 @@ The trusted worker image is digest-pinned, SBOM-scanned with zero High or
 Critical findings, and bound to detached Cosign and source-revision evidence.
 Hash-bound SQL migration and SQL-backed worker IaC is implemented; workload
 capability is not claimed until migration and live worker verification pass.
-The SAW VM and OpenShell remain planned work. Requirements in this document
+A private workspace VM running OpenShell with Planning, Execution, and Probe
+sandboxes has since been bootstrapped and probed (see the dated records under
+`docs/`); brokered SSO, runtime credential mediation, signed-policy
+governance, and the connected sandbox-to-incident journey remain planned work.
+Requirements in this document
 describe the target state delivered incrementally by the work packages in
 Section 23. A missing target component is planned work, not evidence that it
 already exists.
@@ -145,8 +150,36 @@ means the complete managed boundary around autonomous work:
 - enterprise SSO and brokered access;
 - default-deny network reachability;
 - external lifecycle and security audit;
-- bounded agent delegation; and
+- bounded agent delegation recorded in a signed delegation record; and
 - a kill switch that the agent cannot control.
+
+NVIDIA's reference design describes containment from the inside out:
+
+```text
+agent loop -> runtime sandbox (OpenShell) -> single-user workspace VM -> SAW envelope
+```
+
+It groups SAW controls into three layers:
+
+| Layer | Purpose | This specification |
+| --- | --- | --- |
+| Baseline managed-workspace controls | Workspace perimeter: image, lifecycle, brokered access, network, audit | Section 12 and Section 11 |
+| Runtime sandbox controls | Kernel-level enforcement of process, filesystem, network, and credentials | Section 5.2 (OpenShell) |
+| Signed-policy governance | Auditable, attestable control surface above the runtime: signed policies and a signed per-engagement delegation record | Section 5.4 and Section 12.5 |
+
+"SAW VM" in this document is shorthand for the single-user workspace VM inside
+the SAW envelope. The VM alone MUST NOT be described as the SAW.
+
+In this repository the SAW hosts a **website-driven agent**, not a person's
+interactive desktop. The website and trusted APIs stay outside the SAW
+(Section 6.2); the workspace VM hosts only the OpenShell gateway and agent
+sandboxes that the website's control plane requests. NVIDIA's "single-user"
+requirement is applied as one trust domain with one accountable human owner
+(the engagement's Operator/sponsor). Website users MUST NOT receive a shell,
+credentials, or network path into the VM. When several website users trigger
+runs in the same workspace VM, isolation between those runs relies on
+separate sandboxes and per-run capabilities; a claim of isolation between
+users or tenants requires separate workspace VMs (Section 12.2).
 
 The SAW VM is the long-lived engagement boundary. For this portfolio phase,
 "long-lived" means the duration of one demonstration engagement, not a
@@ -604,6 +637,17 @@ The gateway MUST enforce quotas for sandbox count, CPU, memory, and lifetime.
 Sandbox creation MUST remain a control-plane action. AgentRunner MUST NOT access
 the OpenShell administrative token, gateway state database, or Podman/Docker
 socket.
+
+### 12.5 Signed Governance
+
+- Each engagement MUST have a delegation record binding the human sponsor,
+  workspace, logical agent, runtime agent, task, scoped resources and tools,
+  duration, approval mode, revocation reference, and audit references.
+- The delegation record and each OpenShell sandbox policy SHOULD be signed by
+  a trusted control-plane key and verified before a sandbox is admitted.
+- Revoking the delegation record MUST stop the associated sandboxes.
+- Until signing and verification are implemented and tested, the project MUST
+  NOT claim NVIDIA's signed-policy governance layer.
 
 ## 13. OpenShell Requirements
 

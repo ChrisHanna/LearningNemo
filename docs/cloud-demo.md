@@ -1,7 +1,9 @@
 # Cloud-Hosted Demo
 
 This project's core purpose is demonstrating OpenShell sandboxes and
-per-sandbox MicroVM isolation inside the Secure Agent Workspace (SAW); see the
+per-sandbox MicroVM isolation inside the Secure Agent Workspace (SAW) — the
+managed envelope around a private workspace VM that runs the website's agent;
+see the
 [root README](../README.md#why-openshell-and-microvms-matter) and
 [ADR 0001](decisions/0001-openshell-microvm-driver.md) for that architecture.
 This guide covers the supporting cloud deployment: it moves the dashboard, its

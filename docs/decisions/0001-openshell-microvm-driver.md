@@ -10,7 +10,12 @@ Run OpenShell `0.0.116` on an exact Ubuntu 24.04 Gen2 image inside one
 no-public-IP Azure VM. Use OpenShell's bundled MicroVM driver, KVM, and one
 fixed 1-vCPU/1-GiB MicroVM allocation per sandbox.
 
-The outer Azure VM is the single-user Secure Agent Workspace boundary. The
+The Azure VM is the single-user workspace VM inside the Secure Agent Workspace
+(SAW) envelope. In NVIDIA's reference design the SAW is the managed envelope
+around that VM (lifecycle, brokered access, perimeter, governed connectors,
+and audit), not the VM itself. The VM hosts the website's agent workload,
+not an interactive user desktop; "single-user" means one trust domain with one
+accountable owner. The
 Planning, Execution, and Probe sandboxes each receive a distinct immutable
 OpenShell policy and their own MicroVM. The gateway listens only on loopback,
 requires its package-managed mTLS client bundle, uses a 15-minute sandbox JWT,
@@ -36,3 +41,9 @@ stronger inner isolation boundary when Azure nested virtualization is present.
   claim the NVIDIA reference architecture's Azure Firewall Premium perimeter.
 - The current slice proves sandbox lifecycle and denial controls. It does not
   yet supply reusable model or broker credentials to AgentRunner.
+- NVIDIA's reference design requires kernel-level runtime sandboxing, not
+  MicroVMs. Per-sandbox MicroVMs are an additional layer chosen here.
+- NVIDIA's signed-policy governance layer is not implemented: OpenShell
+  policies and per-engagement delegation records are not signed or attested.
+  Only the trusted-worker container image is signed. This remains required before
+  claiming reference-aligned SAW governance.

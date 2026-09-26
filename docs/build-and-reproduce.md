@@ -17,6 +17,15 @@ Recorded on 2026-09-14:
 | Post-bootstrap network | Temporary NAT was removed | Azure rejected part of the runtime-lock deployment |
 | Complete SAW demo | Not yet established | Repair the lock, pass final verification, and prove a clean build and sandbox-to-incident integration |
 
+Later records supersede parts of this table. On 2026-09-15 the runtime lock was
+repaired, an owned runtime NAT gateway was attached for approved egress, and a
+fixed Planning proof passed under lockdown
+([runtime diagnosis](diagnose-runtime.md)). On 2026-09-16 the invoice workflow
+ran real Planning and Execution agents in separate OpenShell MicroVMs through
+approval, broker receipts, and independent SQL verification
+([invoice demo](invoice-demo.md#observed-acceptance)). A clean-host
+reproduction is still outstanding.
+
 These are historical results, not current Azure health. Do not bypass a gate to
 turn this table green. Local compilation alone cannot establish Azure service
 tag compatibility or a functioning sandbox.
@@ -166,16 +175,30 @@ Source ownership is deliberately small:
 The recorded configuration pins OpenShell `0.0.116`, the Debian package hash,
 both OCI image digests, Ubuntu image version, and `Standard_D2s_v5`. The host has
 no public IP. Sandboxes use the image-native non-root account. Package download
-and image pulls use temporary NAT, which must be removed before completion.
+and image pulls use a temporary bootstrap NAT and registry rule, which must be
+removed before completion. Runtime egress then uses a separate owned NAT gateway
+(`workspace-runtime-egress.bicep`) under the runtime-lock NSG rules. The
+network stages are described in the
+[infrastructure README](../infra/next-phase/README.md#security-properties).
 
-**Current stop condition (updated 2026-09-15):** the runtime-lock rule was repaired
-and independent host verification passed. A fresh Planning probe still cannot
-reach its approved API after NAT removal. Resolve approved runtime connectivity
-and rerun the route probes under lockdown before claiming a complete build.
-Do not reopen unrestricted egress or reuse the pre-lockdown bootstrap result
-as current route verification.
+**Status (updated 2026-09-15):** the runtime-lock rule was repaired and
+independent host verification passed. Approved runtime connectivity was then
+restored with the owned runtime NAT gateway, guest DNS was pinned to
+`168.63.129.16`, and the fixed Planning route proof passed under lockdown. Do
+not reopen unrestricted egress or reuse the pre-lockdown bootstrap result as
+current route verification.
 
-Run local checks now; run the clean deployment after resolving that blocker:
+Two operational caveats from that recovery:
+
+- The runtime `AzurePlatformIMDS` deny also blocks the host's cloud-init. VM
+  start uses a guarded maintenance path that temporarily removes only that
+  rule on a deallocated VM, then restores and compares all rules; sandbox
+  admission stays blocked while it is absent.
+- This OpenShell version revalidates the sandbox image registry on start, so
+  stop/start must happen within a pinned-registry window.
+
+Run local checks first; the clean deployment still has to be reproduced on a
+new host:
 
 ```bash
 bash infra/next-phase/test-workspace.sh
@@ -194,7 +217,8 @@ A complete build requires all of the following, not just exit zero from a CLI:
 
 - Gateway JSON reports the intended endpoint, `connected`, and authenticated mTLS.
 - Three sandboxes exist and the route and boundary checks pass.
-- Temporary NAT/PIP are absent and the subnet has no NAT association.
+- The temporary bootstrap NAT/PIP and registry rule are absent; only the owned
+  runtime NAT gateway is associated with the subnet.
 - The runtime-lock stack and exact NSG rules verify.
 - Host Internet and IMDS probes fail as intended; the expiry timer is armed.
 - Independent verification writes a current, matching workspace result.

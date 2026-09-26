@@ -13,6 +13,14 @@ and this page. No new dashboard or simulated integration is required.
 
 For setup and teardown, use the [build guide](build-and-reproduce.md).
 
+> **Newer results.** Status statements in this runbook date from 2026-09-14
+> and 2026-09-15. Later work restored approved runtime egress, passed the fixed
+> Planning route proof under lockdown, and ran the
+> [governed invoice incident demo](invoice-demo.md): real Planning and
+> Execution agents in separate OpenShell MicroVMs, human approval, broker
+> receipts, and independent SQL verification. Use that guide for the current
+> end-to-end sandbox story.
+
 ## Start With the Pattern
 
 The site opens on **The pattern**, not the status table. Lead with the use case:
@@ -23,8 +31,10 @@ The site opens on **The pattern**, not the status table. Lead with the use case:
 2. Select a boundary. Explain its risk, the design decision, and the specific
    observation that would prove the control works. The panel also states what
    is implemented or still pending.
-3. Use the containment diagram to distinguish the outer SAW engagement boundary
-   from the inner OpenShell process and route boundary. Guardrails inspect
+3. Use the containment diagram to distinguish the SAW envelope (managed
+   lifecycle, perimeter, and trusted services around a private workspace VM
+   that runs the website's agent) from the inner OpenShell process and route
+   boundary. Guardrails inspect
    content; they do not replace either boundary.
 4. Compare Reader, Operator, Approver, and AgentRunner in the persona-design
    selector. These are target permissions, not a way to change the logged-in
@@ -180,7 +190,8 @@ Say: "There are two different questions: what the model proposes, and what the
 system permits. I test the second independently of the first."
 
 Show the three demonstration parts above and the current acceptance status.
-Explain that the SAW host is private, the OpenShell gateway uses mTLS, and each
+Explain that the workspace VM inside the SAW envelope is private and runs only
+the website's agent sandboxes, the OpenShell gateway uses mTLS, and each
 sandbox has a different policy. Show the
 [three policy files](../infra/next-phase/openshell) as configured intent, then
 move to behavioral evidence.
