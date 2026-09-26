@@ -10,7 +10,7 @@ llms:
     temperature: 0.0
     max_retries: 0
     do_auto_retry: false
-    request_timeout: 45
+    request_timeout: 150
     model_kwargs:
       parallel_tool_calls: false
 workflow:

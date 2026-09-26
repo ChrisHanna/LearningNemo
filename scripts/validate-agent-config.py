@@ -45,10 +45,15 @@ def main() -> int:
         "authenticate_entra",
         "local_input_sanitization",
         "semantic_input_guardrails",
+        "response_output_rails",
     ]:
         raise RuntimeError("workflow security middleware order differs")
+    for name in ("list_tasks", "execute_task", "reset_tasks"):
+        if list(config.functions[name].middleware)[-1:] != ["tool_execution_rails"]:
+            raise RuntimeError(f"{name} execution rails differ")
     print("PASS agent configuration uses local PII sanitization before APIM semantic guardrails")
     print("PASS semantic and agent model calls use distinct APIM operations")
+    print("PASS tool execution rails and response output rails are configured")
     return 0
 
 

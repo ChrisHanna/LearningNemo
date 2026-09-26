@@ -7,6 +7,14 @@ The first screen is the invoice workflow. Planning and Execution are real NeMo
 agents running in different OpenShell MicroVMs. The tool gateway uses NeMo
 Guardrails and APIM; the SQL broker, not model text, enforces approved mutations.
 
+> **Output and execution rails (code change after the September 19 deployment).**
+> The invoice gateway code now also runs NeMo output rails and execution
+> (`tool_input` / `tool_output`) rails, and buffers each model response until
+> they pass. See [NeMo Guardrails coverage](../README.md#nemo-guardrails-coverage).
+> The deployment and evidence recorded below predate this change; it takes
+> effect only after the invoice services and agent image are rebuilt and
+> redeployed.
+
 ## Explicit Demo Sessions
 
 Published September 19, 2026. All five invoice services are on revision 0000026.

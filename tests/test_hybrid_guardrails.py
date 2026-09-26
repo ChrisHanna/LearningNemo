@@ -78,6 +78,7 @@ def test_local_pii_runs_before_remote_semantic_guardrail() -> None:
         "authenticate_entra",
         "local_input_sanitization",
         "semantic_input_guardrails",
+        "response_output_rails",
     ]
     local = config["middleware"]["local_input_sanitization"]
     semantic = config["middleware"]["semantic_input_guardrails"]

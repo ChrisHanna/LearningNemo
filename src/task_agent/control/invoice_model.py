@@ -1,10 +1,12 @@
-"""Trusted APIM inference transport and NeMo check-only input enforcement."""
+"""Trusted APIM inference transport with NeMo input, output, and execution rails."""
 
 import asyncio
 import json
 from urllib.parse import urlsplit
 
 import httpx
+
+from task_agent.control import invoice_rails
 
 
 CHECK_PROMPT = '''You are checking untrusted incident input and retrieved database content.
@@ -56,15 +58,71 @@ class InvoiceModelGateway:
             result = await self.rails.check_async(messages=[{'role': 'user', 'content': payload}], rail_types=[RailType.INPUT])
         return result.status == 'passed'
 
-    async def complete(self, payload):
+    async def check_tool_results(self, messages, *, kind):
+        """Execution rail on tool results before they reach the model; fails closed."""
+        names = {}
+        for message in messages:
+            for call in message.get('tool_calls') or () if message.get('role') == 'assistant' else ():
+                if isinstance(call, dict) and isinstance(call.get('function'), dict):
+                    names[call.get('id')] = call['function'].get('name')
+        results = []
+        for message in messages:
+            if message.get('role') == 'tool':
+                content = message.get('content')
+                results.append({'role': 'tool', 'content': content if isinstance(content, str) else None,
+                                'name': names.get(message.get('tool_call_id'), 'unknown'),
+                                'tool_call_id': message.get('tool_call_id') or ''})
+        if not results:
+            return True
+        async with asyncio.timeout(30):
+            response = await self.rails.generate_async(
+                messages=[{'role': 'context', 'content': {'invoice_kind': kind}},
+                          {'role': 'user', 'content': 'Invoice agent tool results'}, *results],
+                options={'rails': ['tool_input'], 'log': {'activated_rails': True}})
+        return not invoice_rails.rail_blocked(response, invoice_rails.TOOL_INPUT_RAIL)
+
+    async def check_response(self, content, tool_calls, *, kind, scenario_id):
+        """Execution rail on proposed tool calls, then output rails on model-written text."""
+        if tool_calls:
+            async with asyncio.timeout(30):
+                response = await self.rails.generate_async(
+                    messages=[{'role': 'context', 'content': {'invoice_kind': kind, 'scenario_id': scenario_id}},
+                              {'role': 'user', 'content': 'Invoice agent model response'},
+                              {'role': 'event', 'event': {'type': 'BotToolCalls', 'tool_calls': tool_calls}}],
+                    options={'rails': ['tool_output'], 'log': {'activated_rails': True}})
+            if invoice_rails.rail_blocked(response, invoice_rails.TOOL_OUTPUT_RAIL):
+                return False
+        text = [content] if content else []
+        for call in tool_calls:
+            if call['name'] == 'publish_decision':
+                decision = json.loads(call['arguments'])
+                text.extend([decision['diagnosis'], decision['rationale'], *decision['risks']])
+        if not any(part.strip() for part in text):
+            return True
+        from nemoguardrails.rails.llm.options import RailType
+        async with asyncio.timeout(30):
+            result = await self.rails.check_async(
+                messages=[{'role': 'user', 'content': 'Invoice agent model response'},
+                          {'role': 'assistant', 'content': '\n'.join(text)}], rail_types=[RailType.OUTPUT])
+        return result.status == 'passed'
+
+    async def complete(self, payload, *, kind, scenario_id):
         response = await self.client.post(self.origin + '/chat/completions',
             headers={'Authorization': 'Bearer ' + self.api_key}, json={**payload, 'stream': False}, timeout=45)
         if response.status_code != 200 or len(response.content) > 262144:
             raise RuntimeError('model completion unconfirmed')
-        return response.json()
+        result = response.json()
+        try:
+            content, tool_calls = assemble_message(result)
+        except (KeyError, TypeError, ValueError, IndexError):
+            raise OutputRailBlocked('model response unreadable') from None
+        if not await self.check_response(content, tool_calls, kind=kind, scenario_id=scenario_id):
+            raise OutputRailBlocked('model response blocked')
+        return result
 
-    async def stream(self, payload):
-        total = 0
+    async def stream(self, payload, *, kind, scenario_id):
+        """Buffer the bounded stream so output and execution rails run before any byte is returned."""
+        chunks, total = [], 0
         async with asyncio.timeout(60):
             async with self.client.stream('POST', self.origin + '/chat/completions',
                     headers={'Authorization': 'Bearer ' + self.api_key}, json={**payload, 'stream': True}, timeout=45) as response:
@@ -74,7 +132,48 @@ class InvoiceModelGateway:
                     total += len(chunk)
                     if total > 262144:
                         raise RuntimeError('bounded model output exceeded')
-                    yield chunk
+                    chunks.append(chunk)
+        try:
+            content, tool_calls = assemble_stream(b''.join(chunks))
+        except (KeyError, TypeError, ValueError, IndexError):
+            raise OutputRailBlocked('model stream unreadable') from None
+        if not await self.check_response(content, tool_calls, kind=kind, scenario_id=scenario_id):
+            raise OutputRailBlocked('model response blocked')
+        return chunks
+
+
+class OutputRailBlocked(Exception):
+    """Model output or a proposed tool call was refused before reaching the sandbox."""
+
+
+def assemble_message(result):
+    message = result['choices'][0]['message']
+    calls = [{'id': call['id'], 'name': call['function']['name'], 'arguments': call['function']['arguments']}
+             for call in message.get('tool_calls') or ()]
+    return message.get('content') or '', calls
+
+
+def assemble_stream(body):
+    content, calls = [], {}
+    for line in body.decode('utf-8').splitlines():
+        if not line.startswith('data:'):
+            continue
+        data = line[5:].strip()
+        if data == '[DONE]':
+            continue
+        for choice in json.loads(data).get('choices') or ():
+            if choice.get('index', 0) != 0:
+                raise ValueError('one choice expected')
+            delta = choice.get('delta') or {}
+            if delta.get('content'):
+                content.append(delta['content'])
+            for call in delta.get('tool_calls') or ():
+                entry = calls.setdefault(call['index'], {'id': '', 'name': '', 'arguments': ''})
+                entry['id'] = call.get('id') or entry['id']
+                function = call.get('function') or {}
+                entry['name'] += function.get('name') or ''
+                entry['arguments'] += function.get('arguments') or ''
+    return ''.join(content), [calls[index] for index in sorted(calls)]
 
 
 def build_guardrails(*, base_url, api_key):
@@ -83,10 +182,13 @@ def build_guardrails(*, base_url, api_key):
     parsed = urlsplit(base_url)
     if parsed.scheme != 'https' or parsed.hostname != 'apim-nemo-8370187d.azure-api.net' or not parsed.path.rstrip('/').endswith('/guardrails'):
         raise ValueError('owned APIM guardrail route required')
-    configuration = RailsConfig.from_content(config={
+    configuration = RailsConfig.from_content(colang_content=invoice_rails.COLANG, config={
         'models': [], 'colang_version': '1.0',
-        'rails': {'input': {'flows': ['self check input']}},
-        'prompts': [{'task': 'self_check_input', 'content': CHECK_PROMPT}],
+        'rails': {'input': {'flows': ['self check input']}, **invoice_rails.rails_configuration()},
+        'prompts': [{'task': 'self_check_input', 'content': CHECK_PROMPT},
+                    {'task': 'self_check_output', 'content': invoice_rails.SELF_CHECK_OUTPUT_PROMPT}],
     })
     model = ChatOpenAI(model='gpt-4o-mini', base_url=base_url, api_key=api_key, temperature=0, max_retries=0, timeout=20)
-    return LLMRails(configuration, llm=model)
+    rails = LLMRails(configuration, llm=model)
+    invoice_rails.register_actions(rails)
+    return rails

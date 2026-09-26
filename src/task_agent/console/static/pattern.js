@@ -24,7 +24,7 @@
     workspace: {
       label: "03 / Runtime containment", title: "Constrain what the process can do, even when the model is wrong.",
       risk: "Untrusted instructions or generated code can attempt file access, unexpected network calls, or privilege escalation.",
-      control: "SAW supplies the outer Azure engagement boundary. OpenShell applies distinct non-root process and route policies inside it. Guardrails inspect content before the model acts.",
+      control: "SAW supplies the outer Azure engagement boundary. OpenShell applies distinct non-root process and route policies inside it. Guardrails inspect content before and after the model acts, including tool calls and results.",
       proof: "Execute inside Planning, observe its UID, test protected writes, and compare an allowed method/path with a denied one.",
       status: "Sandbox bootstrap and non-root probes observed. Approved API connectivity under runtime lockdown remains unresolved.",
     },

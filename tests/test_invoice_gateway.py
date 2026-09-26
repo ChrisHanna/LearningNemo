@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from task_agent.console.invoice_gateway import create_invoice_gateway
+from task_agent.control.invoice_model import OutputRailBlocked
 from task_agent.control.invoice_repository import new_capability
 
 
@@ -29,16 +30,25 @@ class Repository:
 class Model:
     def __init__(self):
         self.allowed = True
+        self.tool_results_allowed = True
+        self.output_allowed = True
         self.calls = 0
     async def check(self, messages, *, kind):
         return self.allowed
-    async def complete(self, payload):
+    async def check_tool_results(self, messages, *, kind):
+        return self.tool_results_allowed
+    async def complete(self, payload, *, kind, scenario_id):
         self.calls += 1
-        self.payload = payload
+        self.payload, self.scenario_id = payload, scenario_id
+        if not self.output_allowed:
+            raise OutputRailBlocked('fixture')
         return {'choices': []}
-    async def stream(self, payload):
+    async def stream(self, payload, *, kind, scenario_id):
         self.calls += 1
-        yield b'data: {"choices":[]}\n\ndata: [DONE]\n\n'
+        self.scenario_id = scenario_id
+        if not self.output_allowed:
+            raise OutputRailBlocked('fixture')
+        return [b'data: {"choices":[]}\n\n', b'data: [DONE]\n\n']
 
 
 def setup(kind='planning'):
@@ -109,3 +119,20 @@ def test_proposal_schema_target_is_bound_to_sql_admission():
         assert set(choice['required']) == set(properties)
     assert model.payload['tools'][0]['function']['strict'] is True
     assert 'untrusted' not in str(schema)
+
+def test_tool_results_and_model_output_are_rail_gated():
+    client, _, model, events = setup()
+    path = '/v2/invoice/inference/v1/chat/completions'
+    headers = {'Authorization': 'Bearer ' + new_capability('a' * 32)}
+    body = {'model': 'gpt-4o-mini', 'messages': [{'role': 'user', 'content': 'Investigate'}], 'stream': True}
+    response = client.post(path, headers=headers, json=body)
+    assert response.status_code == 200 and response.content == b'data: {"choices":[]}\n\ndata: [DONE]\n\n'
+    assert model.scenario_id == 'b' * 32 and events[-1]['outcome'] == 'output-guardrail-passed'
+    model.tool_results_allowed = False
+    assert client.post(path, headers=headers, json=body).status_code == 403
+    assert model.calls == 1 and events[-1]['outcome'] == 'tool-result-guardrail-denied'
+    model.tool_results_allowed, model.output_allowed = True, False
+    for stream in (True, False):
+        response = client.post(path, headers=headers, json={**body, 'stream': stream})
+        assert response.status_code == 403 and b'choices' not in response.content
+        assert events[-1]['outcome'] == 'output-guardrail-denied'

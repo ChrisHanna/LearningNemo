@@ -460,7 +460,7 @@ def test_capability_inventory_describes_security_without_secrets() -> None:
     assert response.status_code == 200
     payload = response.json()
     capability_ids = {item["id"] for item in payload["capabilities"]}
-    assert {"entra-authentication", "input-guardrails", "tool-authorization", "llm-gateway", "key-vault"} <= capability_ids
+    assert {"entra-authentication", "input-guardrails", "output-execution-guardrails", "tool-authorization", "llm-gateway", "key-vault"} <= capability_ids
     assert {tool["name"] for tool in payload["tools"]} == {
         "current_datetime",
         "list_tasks",
@@ -470,8 +470,10 @@ def test_capability_inventory_describes_security_without_secrets() -> None:
     assert [rail["name"] for rail in payload["guardrails"]] == [
         "PII masking",
         "Semantic prompt-injection check",
+        "Execution rails",
+        "Output rails",
     ]
-    assert [rail["remoteCall"] for rail in payload["guardrails"]] == [False, True]
+    assert [rail["remoteCall"] for rail in payload["guardrails"]] == [False, True, False, False]
     assert payload["identityModel"]["client"]["name"] == "LearningNeMo Local Client"
     assert payload["identityModel"]["profiles"][0]["roles"] == ["Task.Reader"]
     serialized = response.text.lower()
@@ -512,7 +514,7 @@ def test_chat_proxies_response_without_exposing_token() -> None:
     assert response.json()["durationMs"] == 12
     evidence = response.json()["evidence"]
     assert [item["level"] for item in evidence].count("observed") == 4
-    assert [item["level"] for item in evidence].count("configured") == 3
+    assert [item["level"] for item in evidence].count("configured") == 4
     assert "APIM semantic check" in next(item["detail"] for item in evidence if item["name"] == "Input Guardrails")
     assert "server-side-token" not in response.text
     assert agent.tokens == ["server-side-token"]

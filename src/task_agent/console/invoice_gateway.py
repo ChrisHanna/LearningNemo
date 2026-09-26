@@ -11,6 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
 from task_agent.control.invoice_contract import InvoiceStep, PlanningDecision
+from task_agent.control.invoice_model import OutputRailBlocked
 from task_agent.control.invoice_repository import capability_context
 from task_agent.control.operations import OperationDeniedError
 from task_agent.control.sql_backend import SqlProcedureUnavailableError
@@ -157,9 +158,21 @@ def create_invoice_gateway(*, kind, repository, inference_admission, model_gatew
         if not await model_gateway.check(payload['messages'], kind=kind):
             await event(token, 'inference', 'guardrail-denied')
             raise OperationDeniedError('untrusted instructions blocked')
+        if not await model_gateway.check_tool_results(payload['messages'], kind=kind):
+            await event(token, 'inference', 'tool-result-guardrail-denied')
+            raise OperationDeniedError('tool result blocked')
         await event(token, 'inference', 'guardrail-passed')
+        try:
+            if body.stream:
+                chunks = await model_gateway.stream(payload, kind=kind, scenario_id=authority['scenario_id'])
+            else:
+                result = await model_gateway.complete(payload, kind=kind, scenario_id=authority['scenario_id'])
+        except OutputRailBlocked:
+            await event(token, 'inference', 'output-guardrail-denied')
+            raise OperationDeniedError('model output blocked') from None
+        await event(token, 'inference', 'output-guardrail-passed')
         if body.stream:
-            return StreamingResponse(model_gateway.stream(payload), media_type='text/event-stream')
-        return await model_gateway.complete(payload)
+            return StreamingResponse(iter(chunks), media_type='text/event-stream')
+        return result
 
     return app
