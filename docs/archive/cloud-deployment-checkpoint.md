@@ -1,5 +1,7 @@
 # Cloud Deployment Checkpoint
 
+> **Archived dated record.** This describes the state on the date it was recorded, not current status. See [Status](../status.md) and the [archive index](README.md).
+
 Recorded on 2026-09-15. This is a dated deployment result, not current health.
 
 Dashboard:
@@ -64,5 +66,5 @@ review archive. The last recorded dashboard deployment expiry was
 
 Each of these scheduled demo services has one minimum replica. The expiry tag
 is not an automatic stop or deletion mechanism. Use the scoped cleanup in the
-[cloud demo guide](cloud-demo.md) when the window ends. Existing workers and the
+[cloud demo guide](../guides/cloud-demo.md) when the window ends. Existing workers and the
 SAW have separate lifecycle and cleanup obligations.

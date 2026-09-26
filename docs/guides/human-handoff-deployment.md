@@ -33,7 +33,7 @@ export AZURE_SUBSCRIPTION_ID="<expected-subscription-id>"
 LEARNINGNEMO_AZURE_APPLY=cloud-demo-build bash scripts/build-cloud-demo.sh human
 ```
 
-The new image uses [cloud-human.Dockerfile](../containers/cloud-human.Dockerfile).
+The new image uses [cloud-human.Dockerfile](../../containers/cloud-human.Dockerfile).
 The build uses the existing allowlisted context, runs both API import checks
 and SQL driver import as UID 65532, and records the pinned reference in
 `~/.local/state/learningnemo/cloud-human.image.txt`. Building does not deploy a
@@ -42,7 +42,7 @@ means console and agent; the human image is opt-in.
 
 ## Stage and Validate
 
-[human-services.bicep](../infra/next-phase/human-services.bicep) is resource-group
+[human-services.bicep](../../infra/next-phase/human-services.bicep) is resource-group
 scoped. Use a separately owned disposable group, not the existing demo group.
 Its default `deployApps=false` creates only the two managed identities. It
 contains no implicit ACR or SQL role grants. Apply only after an owned-resource
@@ -74,8 +74,8 @@ collisions. A successful local validator is not approval to skip live preflight.
 
 Version and apply the staged SQL through the reviewed migration mechanism:
 
-1. [001_review_boundary.sql](../infra/next-phase/review-service/001_review_boundary.sql)
-2. [002_incident_handoff.sql](../infra/next-phase/review-service/002_incident_handoff.sql)
+1. [001_review_boundary.sql](../../infra/next-phase/review-service/001_review_boundary.sql)
+2. [002_incident_handoff.sql](../../infra/next-phase/review-service/002_incident_handoff.sql)
 
 These are not automatically appended to the six existing immutable migration
 receipts. Do not edit or replay an old applied migration to include them.

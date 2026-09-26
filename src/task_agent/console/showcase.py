@@ -88,7 +88,7 @@ SHOWCASE = {
 }
 
 SHOWCASE_DOCUMENTS = {
-    "build": "build-and-reproduce.md",
-    "demo": "capability-demo.md",
-    "diagnostics": "openshell-bootstrap-diagnostic-record.md",
+    "build": "guides/build-and-reproduce.md",
+    "demo": "guides/capability-demo.md",
+    "diagnostics": "archive/openshell-bootstrap-diagnostic-record.md",
 }

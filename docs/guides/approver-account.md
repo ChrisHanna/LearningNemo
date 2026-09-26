@@ -52,7 +52,7 @@ owner-only identity record for idempotent provisioning:
 The connected queue and exact-plan decision APIs are now deployed with stable
 Entra tenant/object identity binding. After ordinary Approver sign-in, choose
 **Authorize review access** for the separately consented `plans.review` scope.
-The [live checkpoint](human-handoff-live-checkpoint.md) records deployment proof,
+The [live checkpoint](../archive/human-handoff-live-checkpoint.md) records deployment proof,
 remaining real-user rehearsal gates, and the scheduled service expiry.
 
 The console accepts the dedicated `Task.Approver` account in the same

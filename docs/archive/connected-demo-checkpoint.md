@@ -1,5 +1,7 @@
 # Connected Demo Implementation Checkpoint
 
+> **Archived dated record.** This describes the state on the date it was recorded, not current status. See [Status](../status.md) and the [archive index](README.md).
+
 Status update: the SQL schema, private Incident/Review services, dedicated consent,
 and dashboard integration are now deployed and verified at the service level.
 See the [live checkpoint](human-handoff-live-checkpoint.md) for exact revisions,
@@ -103,7 +105,7 @@ handling across real processes. These remain release gates.
    task/workspace/agent context and the canonical human author binding. No
    in-memory reference workflow or fabricated database row may stand in for it.
 4. Use the separately built human-services image and the
-   [handoff deployment contract](human-handoff-deployment.md). The dashboard
+   [handoff deployment contract](../guides/human-handoff-deployment.md). The dashboard
    image deliberately has no SQL runtime. Verify actual private-service
    readiness, least-authority database grants, and native SQL connectivity;
    build-time import checks do not establish those properties.
