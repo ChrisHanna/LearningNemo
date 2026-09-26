@@ -6,7 +6,7 @@
 | `cloud-console.Dockerfile` | Cloud dashboard (`task_agent.console.cloud`) | Digest-pinned `python:3.12-slim-bookworm` | `scripts/build-cloud-demo.sh` | Digest-pinned base and hash-locked requirements only |
 | `cloud-agent.Dockerfile` | Cloud NeMo task API (`scripts/run-cloud-agent.py`) | Digest-pinned `python:3.12-slim-bookworm` | `scripts/build-cloud-demo.sh` | Digest-pinned base and hash-locked requirements only |
 | `cloud-human.Dockerfile` | Human-handoff services (`task_agent.console.incident_service` and siblings) | Digest-pinned `python:3.12-slim-bookworm` | `scripts/build-cloud-demo.sh` | Digest-pinned base and hash-locked requirements only |
-| `invoice-agent.Dockerfile` | Invoice agent inside OpenShell sandboxes | Digest-pinned OpenShell community sandbox base plus the digest-pinned cloud-agent image | `scripts/build-invoice-agent.sh` | Digest-pinned inputs only |
+| `invoice-agent.Dockerfile` | Invoice agent inside OpenShell sandboxes | Digest-pinned OpenShell community sandbox base plus the digest-pinned cloud-agent image | `scripts/build-invoice-agent.sh` | Digest-pinned inputs only; the build fails if any path in the invoice OpenShell policies is missing, because those policies use Landlock `hard_requirement` |
 | `invoice-services.Dockerfile` | Invoice gateways and workflow API (`task_agent.console.invoice_deployed`) | The digest-pinned invoice-agent image | `scripts/build-invoice-services.sh` | Digest-pinned input only |
 
 All images except the sandbox image run as numeric UID 65532; the sandbox image

@@ -39,6 +39,13 @@ were missing `tls: terminate`, required for HTTPS method/path inspection. The
 Planning correction was applied with `policy set --wait`; the Execution YAML
 correction is local and has not been applied to its failed live instance.
 
+> **Correction (2026-09-26).** OpenShell v0.0.116 documents `tls: terminate` as
+> deprecated with no effect: the proxy auto-detects and terminates TLS for
+> inspected endpoints. The GET recovery recorded here therefore came from
+> something else in the same sequence, most likely the DNS repair or
+> re-applying the policy with `policy set --wait`, not from the `tls` field.
+> The invoice policies no longer set it.
+
 **Live proof passed at 2026-09-15 14:52:54 UTC**:
 
 - Planning UID 998; privilege escalation denied.

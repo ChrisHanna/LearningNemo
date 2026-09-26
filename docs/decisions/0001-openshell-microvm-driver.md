@@ -16,8 +16,10 @@ around that VM (lifecycle, brokered access, perimeter, governed connectors,
 and audit), not the VM itself. The VM hosts the website's agent workload,
 not an interactive user desktop; "single-user" means one trust domain with one
 accountable owner. The
-Planning, Execution, and Probe sandboxes each receive a distinct immutable
-OpenShell policy and their own MicroVM. The gateway listens only on loopback,
+Planning, Execution, and Probe sandboxes each receive a distinct OpenShell
+policy and their own MicroVM. Filesystem, Landlock, and process sections are
+fixed at sandbox creation; network sections can be replaced on a running
+sandbox only by the operator through the gateway. The gateway listens only on loopback,
 requires its package-managed mTLS client bundle, uses a 15-minute sandbox JWT,
 and exposes no Docker or Podman socket to a sandbox.
 
@@ -47,3 +49,18 @@ stronger inner isolation boundary when Azure nested virtualization is present.
   policies and per-engagement delegation records are not signed or attested.
   Only the trusted-worker container image is signed. This remains required before
   claiming reference-aligned SAW governance.
+- The invoice Planning and Execution policies follow OpenShell v0.0.116
+  security guidance: Landlock `hard_requirement` (the sandbox refuses to start
+  rather than run without filesystem restrictions), only
+  `/usr/local/bin/python3.12` may reach the gateway routes, and REST endpoints
+  use `enforcement: enforce` with exact method/path rules. The invoice agent
+  image build fails if any policy path is missing.
+- The fixed-proof Planning, Execution, and Probe policies are hash-pinned by
+  the retained-workspace scripts and are intentionally left unchanged to match
+  their recorded evidence. They still use Landlock `best_effort` and carry
+  `tls: terminate`, which OpenShell v0.0.116 accepts but treats as a deprecated
+  no-op (TLS is auto-detected and terminated). Apply the invoice hardening to
+  them only together with a full rebootstrap.
+- The per-run capability is still visible to the agent process inside the
+  sandbox. OpenShell providers could inject it at the proxy instead; that
+  runtime credential mediation remains outstanding.

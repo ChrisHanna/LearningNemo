@@ -43,8 +43,13 @@ rationale and its recorded constraints.
   control plane, network perimeter, trusted services, and audit around it are
   part of the envelope.
 - **OpenShell policy boundaries.** Planning, Execution, and Probe each run
-  under a distinct, immutable OpenShell policy that constrains their
-  permitted operations and network routes. Planning and Execution are
+  under a distinct OpenShell policy that constrains their permitted
+  operations and network routes. Filesystem, Landlock, and process rules are
+  fixed when a sandbox is created; network rules can be changed on a running
+  sandbox, but only by the operator through the mTLS-authenticated gateway,
+  which sandboxes cannot reach. The invoice agent's policies require Landlock
+  (`hard_requirement`) and allow only the agent's Python interpreter to reach
+  its exact, enforced gateway routes. Planning and Execution are
   deliberately kept separate so that a planning step cannot itself execute a
   mutation.
 - **Per-sandbox MicroVMs.** This repository selects OpenShell's bundled
@@ -73,7 +78,7 @@ unverified end-to-end.
 | SAW reference-design element | This repository | Status |
 | --- | --- | --- |
 | Single-user workspace VM, approved image, managed lifecycle | Dedicated private Trusted Launch Azure VM for the website agent, pinned Ubuntu image, control-plane-owned start/stop. The invoice deployment runs it in `operator-managed` availability mode (no VM lease timer); per-run watchdogs and capabilities still expire | Implemented; see dated evidence |
-| Runtime sandbox layer (OpenShell) | Planning, Execution, and Probe sandboxes with distinct immutable policies, each in its own MicroVM | Implemented; policy/boundary probes recorded |
+| Runtime sandbox layer (OpenShell) | Planning, Execution, and Probe sandboxes with distinct policies (static sections fixed at creation, network rules operator-controlled), each in its own MicroVM | Implemented; policy/boundary probes recorded |
 | Separate sponsor, workspace, logical-agent, and runtime-agent identities | Entra human roles, AgentRunner logical identity, per-sandbox runtime capability | Designed; AgentRunner delegation integration partially pending |
 | Governed connectors with human review for sensitive writes | Capability-authenticated invoice tool gateways, SQL broker enforcing the exact approved plan, independent verifier, separate Approver | Implemented; sandbox Planning -> approval -> sandbox Execution -> verification recorded on 2026-09-16 with a synthetic reviewer, and the Approver UI validated on 2026-09-19 ([invoice demo](docs/invoice-demo.md)) |
 | Brokered interactive access (enterprise SSO) | Not yet implemented | Gap |
