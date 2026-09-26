@@ -34,8 +34,8 @@ The site opens on **The pattern**, not the status table. Lead with the use case:
 3. Use the containment diagram to distinguish the SAW envelope (managed
    lifecycle, perimeter, and trusted services around a private workspace VM
    that runs the website's agent) from the inner OpenShell process and route
-   boundary. Guardrails inspect
-   content; they do not replace either boundary.
+   boundary. Guardrails inspect content on input, on tool calls and results,
+   and on output; they do not replace either boundary.
 4. Compare Reader, Operator, Approver, and AgentRunner in the persona-design
    selector. These are target permissions, not a way to change the logged-in
    user. Approver and AgentRunner integration remain explicitly pending.

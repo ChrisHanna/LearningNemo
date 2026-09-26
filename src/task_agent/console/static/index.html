@@ -363,7 +363,7 @@
 
             <div class="system-counts" aria-label="System capability counts">
               <div><strong id="capabilityCount">—</strong><span>controls</span></div>
-              <div><strong id="guardrailCount">—</strong><span>input rails</span></div>
+              <div><strong id="guardrailCount">—</strong><span>rails</span></div>
               <div><strong id="toolCount">—</strong><span>scoped tools</span></div>
             </div>
 
@@ -402,10 +402,10 @@
 
             <section class="system-section" aria-labelledby="guardrailHeading">
               <div class="section-title-row">
-                <h2 id="guardrailHeading">Input Guardrails</h2>
+                <h2 id="guardrailHeading">Guardrails</h2>
                 <span class="local-badge">Local + APIM</span>
               </div>
-              <p class="section-intro">Authentication passes first. These rails then inspect the prompt before tool selection or model execution.</p>
+              <p class="section-intro">Authentication passes first. Input rails then inspect the prompt before the model runs, execution rails check each tool's arguments and results, and output rails check the final answer.</p>
               <div id="guardrailList" class="guardrail-list"></div>
             </section>
 
