@@ -45,5 +45,5 @@ stronger inner isolation boundary when Azure nested virtualization is present.
   MicroVMs. Per-sandbox MicroVMs are an additional layer chosen here.
 - NVIDIA's signed-policy governance layer is not implemented: OpenShell
   policies and per-engagement delegation records are not signed or attested.
-  Only container release artifacts are signed. This remains required before
+  Only the trusted-worker container image is signed. This remains required before
   claiming reference-aligned SAW governance.

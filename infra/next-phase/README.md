@@ -1,10 +1,23 @@
 # LearningNeMo Next-Phase Infrastructure
 
-This directory implements the first infrastructure slices from the
-[next-phase specification](../../docs/next-phase-saw-openshell-spec.md): WP0
-preflight, the WP1 Azure network foundation, and the WP2a trusted platform
-base, WP2b Entra audiences and least-authority workers, and the WP3 private SQL
-control plane with a disposable end-to-end incident cycle.
+This directory implements the Azure infrastructure from the
+[next-phase specification](../../docs/next-phase-saw-openshell-spec.md):
+
+- WP0 preflight and the WP1 Azure network foundation;
+- the WP2a trusted platform base and WP2b Entra audiences and least-authority
+  workers;
+- the WP3 private SQL control plane with a disposable end-to-end incident
+  cycle;
+- the private workspace VM, its OpenShell bootstrap, and its staged network
+  egress controls (the SAW layer); and
+- the cloud dashboard, human-handoff services, and invoice services that drive
+  the website agent.
+
+Sections below describe WP0-WP3 in detail. The later layers are listed under
+[Workspace, Cloud Demo, and Invoice Layers](#workspace-cloud-demo-and-invoice-layers)
+and documented in the [build guide](../../docs/build-and-reproduce.md),
+[cloud demo guide](../../docs/cloud-demo.md), and
+[invoice demo guide](../../docs/invoice-demo.md).
 
 ## Current Claim
 
@@ -15,12 +28,13 @@ six hash-bound SQL migrations, and a one-shot approval-bound incident cycle.
 Migration and control jobs are removed after execution; workers and supporting
 runtime resources remain TTL-bound. On 2026-09-14, a private SAW VM completed
 OpenShell bootstrap with Planning, Execution, and Probe MicroVMs and policy
-checks. On 2026-09-15 the runtime-lock DNS rule was repaired and independent host
-verification passed. Fresh Planning execution proved non-root operation but
-its approved API requests timed out after NAT removal. Approved runtime
-connectivity, clean-host reproducibility, and incident execution through OpenShell
-remain pending. This is not yet a
-complete end-to-end SAW demonstration; recorded results are not current health.
+checks. On 2026-09-15 the runtime-lock DNS rule was repaired, independent host
+verification passed, an owned runtime NAT restored approved egress, and a fixed
+Planning route proof passed under lockdown. On 2026-09-16 the invoice workflow
+ran Planning and Execution agents through OpenShell to broker receipts and
+independent SQL verification. Clean-host reproducibility remains pending. This
+is not yet a complete reference-aligned SAW; recorded results are not current
+health.
 
 The [build guide](../../docs/build-and-reproduce.md) connects these infrastructure
 phases to local setup, image evidence, SAW deployment, and cleanup. The
@@ -161,6 +175,23 @@ resources.
 | `test-control-cycle.sh` | Run the local control-cycle, SQL adapter, cancellation, and IaC policy gates |
 | `reconcile-wp3.sh` / `verify-wp3.sh` | Compose all guarded layers into one repeatable preview/apply/verification path |
 
+### Workspace, Cloud Demo, and Invoice Layers
+
+These later layers are not part of the WP0-WP3 gates above. Each has its own
+preview, validation, and verification scripts.
+
+| Area | Main files | Purpose |
+| --- | --- | --- |
+| Workspace VM | `environments/dev.workspace.config.json`, `workspace.bicep`, `workspace_parameters.py`, `preflight_workspace.py`, `deploy-workspace.sh`, `verify_workspace.py`, `remove-workspace.sh`, `test-workspace.sh` | Private, no-public-IP Trusted Launch VM (`Standard_D2s_v5`, pinned Ubuntu 24.04 image) whose runtime identity has no Azure RBAC |
+| OpenShell bootstrap | `workspace-openshell-bootstrap.bicep`, `../../scripts/bootstrap-saw-openshell.sh`, `validate-workspace-openshell-bootstrap.py` | Install pinned OpenShell `0.0.116`, a loopback-only mTLS gateway with 15-minute JWTs, the MicroVM driver (1 vCPU / 1 GiB per sandbox), and the Planning, Execution, and Probe sandboxes |
+| Sandbox policies | `openshell/*.yaml` | Planning, Execution, Probe, and invoice Planning/Execution policies |
+| Workspace egress | `workspace-bootstrap-egress.bicep`, `workspace-registry-bootstrap.bicep`, `workspace-subnet-egress.bicep`, `workspace-runtime-lock.bicep`, `workspace-runtime-egress.bicep`, `deploy_runtime_egress.py` and their validators | Staged network controls described under [Security Properties](#security-properties) |
+| Workspace operations | `renew_preserved_workspace.py`, `repair_retained_workspace.py`, `resume_workspace_sandboxes.py`, `run_workspace_proof.py`, `run_retained_boundary_proofs.py`, `capture_workspace_diagnostics.py`, `collect_runtime_diagnostics.py` | Lease renewal, recovery, fixed proofs, and sanitized diagnostics |
+| Cloud dashboard | `cloud-demo.bicep`, `modules/cloud-demo-*.bicep`, `deploy-cloud-demo.sh`, `validate_cloud_demo.py`, `verify-cloud-demo.py`, `remove-cloud-demo.py` | Dashboard, internal workspace controller, and task API in Container Apps |
+| Human-handoff services | `human-services.bicep`, `human-*-job.bicep`, `deploy_human_services.py`, `verify_human_services.py`, `review-service/001`-`007` SQL | Approver review, incident handoff, and execution coordination |
+| Invoice services | `invoice-services.bicep`, `invoice-package-maintenance.bicep`, `deploy_invoice_services.py`, `verify_invoice_services.py`, `rehearse_invoice_*.py`, `review-service/008`-`016` SQL | Diagnostic and execution gateways used by the invoice agent sandboxes |
+| Connectivity probe | `connectivity-probe-*.bicep`, `deploy-connectivity-probe.sh`, `verify_connectivity_probe.py` | Bounded private SQL connectivity checks |
+
 ## Reproducibility Contract
 
 The checked-in parameter, provider, and toolchain files are the source of truth.
@@ -227,7 +258,7 @@ override managed security, cost, ownership, environment, or expiration tags.
 From a new Ubuntu or WSL2 environment:
 
 ```bash
-cd /mnt/c/Users/aygul/Desktop/agents
+cd LearningNemo  # repository root
 
 UV_PROJECT_ENVIRONMENT="$HOME/.venvs/nemo-agents" \
   uv sync --locked
@@ -294,18 +325,57 @@ itself does not deploy billable service instances.
 
 ## Security Properties
 
-The SAW workspace subnet starts with these explicit controls:
+The workspace subnet's network controls are applied in stages. All stages use
+the same network security group (NSG), `nsg-vnet-learningnemo-saw-dev-workspace`.
 
-- deny all inbound traffic;
-- deny direct traffic to the trusted platform VNet;
-- deny east-west traffic inside the SAW VNet;
-- deny direct traffic to the Azure `Sql` service tag on every port; and
-- disable BGP route propagation on the workspace route table.
+**1. Foundation (WP1, `modules/saw-network.bicep`).** Always present:
 
-The Azure Firewall subnet is reserved as `/26`, but no firewall is deployed in
-this cost-free slice. Other internet egress is still possible through Azure's
-default system route. OpenShell and Azure Firewall enforcement arrive in later
-work packages. Until then, this is not a reference-aligned SAW perimeter.
+| Priority | Direction | Rule |
+| ---: | --- | --- |
+| 100 | Inbound | Deny all inbound traffic |
+| 100 | Outbound | Deny the trusted platform VNet |
+| 110 | Outbound | Deny east-west traffic inside the SAW VNet |
+| 120 | Outbound | Deny the Azure `Sql` service tag on every port |
+
+The workspace route table disables BGP route propagation. With only these
+rules, other internet egress is still possible through Azure's default route.
+
+**2. Bootstrap (temporary).** `workspace-bootstrap-egress.bicep` attaches a
+temporary NAT gateway so the VM can install pinned packages, and
+`workspace-registry-bootstrap.bicep` adds rule 124, allowing HTTPS only to the
+pinned sandbox image registry addresses. Both are removed before runtime
+proofs.
+
+**3. Runtime lock (`workspace-runtime-lock.bicep`).** Applied after bootstrap:
+
+| Priority | Direction | Rule |
+| ---: | --- | --- |
+| 121 | Outbound | Deny `AzurePlatformIMDS` (instance metadata) |
+| 122 | Outbound | Allow DNS to `168.63.129.16:53` |
+| 125 | Outbound | Allow HTTPS to the `AzureCloud` service tag |
+| 130 | Outbound | Deny `Internet` |
+
+**4. Runtime egress (`workspace-runtime-egress.bicep`,
+`deploy_runtime_egress.py`).** Attaches an owned NAT gateway for outbound
+connections without changing the NSG rules above.
+
+The IMDS deny (121) also blocks the host's own cloud-init. Starting the VM
+therefore uses a guarded maintenance path that temporarily removes only that
+rule on a deallocated VM and restores it before sandbox admission (see
+[runtime diagnosis](../../docs/diagnose-runtime.md)).
+
+What this does and does not provide:
+
+- General internet egress is denied at the NSG layer once the runtime lock is
+  applied.
+- `AzureCloud` covers every public Azure IP address, including resources owned
+  by other Azure customers. The NSG cannot restrict traffic to this project's
+  own endpoints; that restriction comes only from OpenShell's per-sandbox
+  network policy.
+- The `/26` Azure Firewall subnet is reserved, but no firewall is deployed.
+  Hostname-based egress filtering and the NVIDIA reference design's Azure
+  Firewall Premium perimeter are therefore not provided. This is a lower-cost
+  substitute, not a reference-aligned SAW perimeter.
 
 The Container Apps subnet uses the current workload-profile requirements:
 
@@ -318,7 +388,7 @@ The Container Apps subnet uses the current workload-profile requirements:
 Run from Ubuntu WSL:
 
 ```bash
-cd /mnt/c/Users/aygul/Desktop/agents
+cd LearningNemo  # repository root
 python3 infra/next-phase/preflight.py \
   --parameters infra/next-phase/environments/dev.parameters.json
 ```

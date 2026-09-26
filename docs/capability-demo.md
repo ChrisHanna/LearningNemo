@@ -13,6 +13,14 @@ and this page. No new dashboard or simulated integration is required.
 
 For setup and teardown, use the [build guide](build-and-reproduce.md).
 
+> **Newer results.** Status statements in this runbook date from 2026-09-14
+> and 2026-09-15. Later work restored approved runtime egress, passed the fixed
+> Planning route proof under lockdown, and ran the
+> [governed invoice incident demo](invoice-demo.md): real Planning and
+> Execution agents in separate OpenShell MicroVMs, human approval, broker
+> receipts, and independent SQL verification. Use that guide for the current
+> end-to-end sandbox story.
+
 ## Start With the Pattern
 
 The site opens on **The pattern**, not the status table. Lead with the use case:

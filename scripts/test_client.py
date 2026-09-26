@@ -26,7 +26,7 @@ from task_agent.console.walkthrough import walkthrough_manifest
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--access", choices=PERSONA_ROLES, default="reader")
-    parser.add_argument("--url", default="http://localhost:8000/v1/chat/completions")
+    parser.add_argument("--url", default="http://127.0.0.1:8001/v1/chat/completions")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--prompt", help="Send one prompt and exit")
     mode.add_argument("--interactive", action="store_true", help="Start an interactive session (the default)")

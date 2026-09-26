@@ -1,4 +1,20 @@
-# Trusted Runtime Image
+# Container Images
+
+| Dockerfile | Runs | Base | Build script | Supply-chain evidence |
+| --- | --- | --- | --- | --- |
+| `trusted-runtime.Dockerfile` | Trusted SQL workers (`task_agent.control.runtime`) | Digest-pinned build stages, Azure Linux distroless runtime | `scripts/build-trusted-image.sh` | SBOM, vulnerability scan, detached Cosign signature, release attestation |
+| `cloud-console.Dockerfile` | Cloud dashboard (`task_agent.console.cloud`) | Digest-pinned `python:3.12-slim-bookworm` | `scripts/build-cloud-demo.sh` | Digest-pinned base and hash-locked requirements only |
+| `cloud-agent.Dockerfile` | Cloud NeMo task API (`scripts/run-cloud-agent.py`) | Digest-pinned `python:3.12-slim-bookworm` | `scripts/build-cloud-demo.sh` | Digest-pinned base and hash-locked requirements only |
+| `cloud-human.Dockerfile` | Human-handoff services (`task_agent.console.incident_service` and siblings) | Digest-pinned `python:3.12-slim-bookworm` | `scripts/build-cloud-demo.sh` | Digest-pinned base and hash-locked requirements only |
+| `invoice-agent.Dockerfile` | Invoice agent inside OpenShell sandboxes | Digest-pinned OpenShell community sandbox base plus the digest-pinned cloud-agent image | `scripts/build-invoice-agent.sh` | Digest-pinned inputs only |
+| `invoice-services.Dockerfile` | Invoice gateways and workflow API (`task_agent.console.invoice_deployed`) | The digest-pinned invoice-agent image | `scripts/build-invoice-services.sh` | Digest-pinned input only |
+
+All images except the sandbox image run as numeric UID 65532; the sandbox image
+runs as OpenShell's `sandbox` user. Only the trusted-runtime image currently has
+an SBOM, vulnerability scan, and signature. Extending that release gate to the
+other images is outstanding work.
+
+## Trusted Runtime Image
 
 `trusted-runtime.Dockerfile` packages only the deterministic `task_agent.control`
 service, the fixed migration entrypoint, and 27 hash-locked dependencies. It

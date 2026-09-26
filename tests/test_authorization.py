@@ -234,7 +234,7 @@ async def test_authentication_denies_missing_workflow_scope() -> None:
     )
     nat_context = MagicMock()
     nat_context.metadata.headers = Headers({
-        "Authorization": f"Bearer {_jwt(scopes=("tasks.read",))}"
+        "Authorization": f"Bearer {_jwt(scopes=('tasks.read',))}"
     })
     call_next = AsyncMock()
 

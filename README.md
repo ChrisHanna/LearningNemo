@@ -72,15 +72,15 @@ unverified end-to-end.
 
 | SAW reference-design element | This repository | Status |
 | --- | --- | --- |
-| Single-user workspace VM, approved image, managed lifecycle | Dedicated private Trusted Launch Azure VM for the website agent, pinned Ubuntu image, lease/TTL and control-plane-owned start/stop | Implemented; see dated evidence |
+| Single-user workspace VM, approved image, managed lifecycle | Dedicated private Trusted Launch Azure VM for the website agent, pinned Ubuntu image, control-plane-owned start/stop. The invoice deployment runs it in `operator-managed` availability mode (no VM lease timer); per-run watchdogs and capabilities still expire | Implemented; see dated evidence |
 | Runtime sandbox layer (OpenShell) | Planning, Execution, and Probe sandboxes with distinct immutable policies, each in its own MicroVM | Implemented; policy/boundary probes recorded |
 | Separate sponsor, workspace, logical-agent, and runtime-agent identities | Entra human roles, AgentRunner logical identity, per-sandbox runtime capability | Designed; AgentRunner delegation integration partially pending |
-| Governed connectors with human review for sensitive writes | Diagnostic gateway, Remediation Broker, independent Verifier, separate Approver | Implemented as trusted services; connected sandbox-to-approval journey pending |
+| Governed connectors with human review for sensitive writes | Capability-authenticated invoice tool gateways, SQL broker enforcing the exact approved plan, independent verifier, separate Approver | Implemented; sandbox Planning -> approval -> sandbox Execution -> verification recorded on 2026-09-16 with a synthetic reviewer, and the Approver UI validated on 2026-09-19 ([invoice demo](docs/invoice-demo.md)) |
 | Brokered interactive access (enterprise SSO) | Not yet implemented | Gap |
 | Runtime credential mediation | Model credential held by a trusted gateway; general OpenShell credential mediation not yet complete | Partial |
 | Workspace perimeter | NSGs plus OpenShell egress policy | Lower-cost substitute; not the reference design's Azure Firewall Premium perimeter |
-| Signed-policy governance and signed delegation record | Container images are signed and attested; sandbox policies and engagement delegations are not signed | Gap |
-| Kill switch outside the agent's control | VM stop/lease expiry via the control plane | Partial; engagement revocation not yet bound to a signed delegation |
+| Signed-policy governance and signed delegation record | The trusted-worker image is signed and attested; other images are digest-pinned only; sandbox policies and engagement delegations are not signed | Gap |
+| Kill switch outside the agent's control | Control-plane VM stop, per-run capability revocation, sandbox stop, and a root-owned admission gate (`/etc/learningnemo/invoice-availability.json`) | Partial; revocation is not yet bound to a signed delegation |
 
 Treat the "Gap" and "Partial" rows as reasons this repository claims a
 single-user OpenShell runtime POC rather than a complete SAW.
@@ -103,7 +103,9 @@ inside the VM:
   agent only through authenticated website actions.
 - Because several website users can trigger runs in the same workspace VM,
   isolation *between their runs* comes from separate, short-lived OpenShell
-  sandboxes and per-run capabilities, not from the VM. Anything that requires
+  sandboxes and per-run capabilities, not from the VM. The invoice deployment
+  admits one active sandbox at a time and retains up to 24 stopped sandboxes
+  for evidence. Anything that requires
   hard isolation between users or tenants needs a separate workspace VM
   (see the specification's cross-user isolation claim level).
 
