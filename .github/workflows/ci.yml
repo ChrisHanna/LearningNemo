@@ -51,6 +51,10 @@ jobs:
       - name: Run Python tests
         run: .venv/bin/python -m pytest -q
 
+      - name: Evaluate guardrails (offline)
+        # Scores the deterministic rails against evals/guardrails/cases.yml. No model calls.
+        run: .venv/bin/python scripts/evaluate-guardrails.py
+
       - name: Run local infrastructure gates
         # Compiles and policy-checks templates only; Azure state is not queried or changed.
         run: bash infra/test-all-local.sh

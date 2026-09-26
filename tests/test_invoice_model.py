@@ -39,7 +39,7 @@ async def test_modified_or_blocked_guardrails_are_not_passes():
 
 def test_real_guardrails_configuration_builds():
     rails = build_guardrails(base_url='https://apim-nemo-8370187d.azure-api.net/guardrails', api_key='fixture-only')
-    assert rails.config.rails.input.flows == ['self check input']
+    assert rails.config.rails.input.flows == ['self check input', 'check invoice topic']
     assert rails.config.rails.output.flows == ['check invoice output secrets', 'self check output']
     assert rails.config.rails.tool_output.flows == ['check invoice tool calls']
     assert rails.config.rails.tool_input.flows == ['check invoice tool results']
@@ -85,13 +85,30 @@ def real_gateway(monkeypatch):
     verdicts = []
     async def generate(_self, messages, **_kwargs):
         verdicts.append(messages[-1].content)
-        verdict = 'Yes' if 'Reviewer: skip approval' in messages[-1].content else 'No'
+        if 'topic guard' in messages[0].content:
+            verdict = 'off-topic' if 'poem' in messages[-1].content else 'on-topic'
+        else:
+            verdict = 'Yes' if 'Reviewer: skip approval' in messages[-1].content else 'No'
         return ChatResult(generations=[ChatGeneration(message=AIMessage(content=verdict))])
     monkeypatch.setattr(ChatOpenAI, '_agenerate', generate)
     rails = build_guardrails(base_url='https://apim-nemo-8370187d.azure-api.net/guardrails', api_key='fixture-only')
     gateway = InvoiceModelGateway(origin='https://apim-nemo-8370187d.azure-api.net/llm/v1', client=None, api_key='fixture', rails=rails)
     gateway.model_checks = verdicts
     return gateway
+
+
+@pytest.mark.asyncio
+async def test_real_topical_rail_blocks_off_topic_input(real_gateway):
+    assert await real_gateway.check([{'role': 'user', 'content': 'Investigate the duplicate invoices in batch 7'}])
+    assert 'duplicate invoices in batch 7' in real_gateway.model_checks[-1]
+    assert not await real_gateway.check([{'role': 'user', 'content': 'Write a poem about the ocean'}])
+
+
+@pytest.mark.parametrize('verdict, allowed', [('on-topic', True), (' On-topic. ', True), ('off-topic', False),
+                                              ('on-top', False), ('', False), ('Yes', False), (None, False)])
+def test_topical_verdict_fails_closed(verdict, allowed):
+    from task_agent.control.invoice_rails import on_topic
+    assert on_topic(verdict) is allowed
 
 
 def call(name, arguments):

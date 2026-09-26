@@ -16,17 +16,41 @@ database. Each step is bounded by a different control.
 | Component | What it does here | Details |
 | --- | --- | --- |
 | **NeMo Agent Toolkit** | Every agent is a NAT workflow: an LLM, registered tools, and security middleware defined in YAML | [NeMo Agent Toolkit](docs/nvidia/nemo-agent-toolkit.md) |
-| **NeMo Guardrails** | Input, output, and execution rails on every model call, run in a trusted gateway the agent cannot bypass | [NeMo Guardrails](docs/nvidia/nemo-guardrails.md) |
+| **NeMo Guardrails** | Input, topical, output, and execution rails on every model call, run in a trusted gateway the agent cannot bypass, scored by a labeled evaluation set | [NeMo Guardrails](docs/nvidia/nemo-guardrails.md) |
 | **OpenShell** | Each agent run gets its own MicroVM sandbox with deny-by-default filesystem, process, and network policy | [OpenShell](docs/nvidia/openshell.md) |
 | **Secure Agent Workspace** | NVIDIA's reference design for the private, single-owner workspace around the runtime | [Secure Agent Workspace](docs/nvidia/secure-agent-workspace.md) |
 
-```text
-agent loop (NeMo Agent Toolkit)
-  -> screened by NeMo Guardrails in a trusted gateway
-  -> contained by an OpenShell MicroVM sandbox
-  -> inside a private workspace VM (Secure Agent Workspace)
-  -> changes only through a broker that enforces the human-approved plan
+```mermaid
+flowchart LR
+    OP["Operator"] -->|"creates scenario"| DASH["Dashboard and<br/>controller"]
+    APR["Approver<br/>(different Entra identity)"] -->|"approves exact plan hash"| DASH
+
+    subgraph SAW["Secure Agent Workspace: private VM"]
+        subgraph OS["OpenShell MicroVM, one per run"]
+            AGENT["Planning or<br/>Execution agent<br/>(NeMo Agent Toolkit)"]
+        end
+    end
+
+    subgraph GW["Trusted gateway: NeMo Guardrails"]
+        direction TB
+        IN["Input rails<br/>injection check, topical rail,<br/>tool-result checks"]
+        LLM["Model via<br/>Azure API Management"]
+        OUT["Output and execution rails<br/>secret detection, output check,<br/>tool-call contract"]
+        IN --> LLM --> OUT
+    end
+
+    DASH -->|"starts a fresh sandbox"| AGENT
+    AGENT -->|"every model call"| IN
+    AGENT -->|"approved step only"| BROKER["SQL broker<br/>enforces the approved plan"]
+    BROKER --> SQL[("Azure SQL")]
+    VER["Independent verifier"] -->|"checks the result"| SQL
 ```
+
+The agent receives a model response only after every output and execution
+rail passes. Each layer assumes the one inside it can fail: the rails screen
+content, the sandbox limits what the agent process can reach, the workspace
+limits what the VM can reach, and the broker limits what can change, whatever
+the agent says.
 
 See [Architecture](docs/architecture.md) for the full design and trust
 boundaries.
@@ -67,6 +91,7 @@ export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/nemo-agents"
 uv sync --frozen
 "$UV_PROJECT_ENVIRONMENT/bin/python" -m pytest -q
 "$UV_PROJECT_ENVIRONMENT/bin/python" scripts/validate-agent-config.py
+"$UV_PROJECT_ENVIRONMENT/bin/python" scripts/evaluate-guardrails.py
 bash infra/test-all-local.sh
 ```
 

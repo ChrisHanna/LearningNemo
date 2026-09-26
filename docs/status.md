@@ -16,7 +16,7 @@ Last updated 2026-09-26.
 | Trusted SQL control cycle | Eight-stage incident cycle independently verified | [Build guide](guides/build-and-reproduce.md) |
 | Invoice workflow | Real Planning and Execution agents in separate MicroVMs, broker receipts, five independent SQL checks (2026-09-16, synthetic reviewer) | [Invoice demo](guides/invoice-demo.md#observed-acceptance) |
 | Approver UI | Independent human approval path validated (2026-09-19) | [Invoice demo](guides/invoice-demo.md#approver-ui-validation-september-19) |
-| CI | Tests, infrastructure gates, and browser tests run on every pull request | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) |
+| CI | Tests, offline guardrail evaluation, infrastructure gates, and browser tests run on every pull request | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) |
 
 ## Merged, not yet deployed
 
@@ -30,6 +30,7 @@ VM (`infra/next-phase/stage_invoice_image.py`) and redeploy
 | Change | Where described |
 | --- | --- |
 | NeMo Guardrails output and execution rails on both agents | [NeMo Guardrails](nvidia/nemo-guardrails.md) |
+| Topical rail keeping the invoice agent within the invoice-incident scope | [NeMo Guardrails](nvidia/nemo-guardrails.md#keeping-the-agent-on-topic) |
 | Invoice sandbox policies: Landlock `hard_requirement`, Python-only egress | [OpenShell](nvidia/openshell.md#sandboxes-and-policies) |
 | Opt-in OpenShell provider mediation of run capabilities | [OpenShell](nvidia/openshell.md#run-credentials) |
 
@@ -45,6 +46,6 @@ challenges before relying on them.
 | No signed policies or signed delegation record | [SAW](nvidia/secure-agent-workspace.md) |
 | No brokered interactive SSO; device-code sign-in | [SAW](nvidia/secure-agent-workspace.md) |
 | Fixed-proof sandbox policies still use Landlock `best_effort` | [OpenShell](nvidia/openshell.md#sandboxes-and-policies) |
-| No guardrail evaluation dataset | [NeMo Guardrails](nvidia/nemo-guardrails.md#gaps) |
+| Guardrail evaluation set scores deterministic rails only; live model-backed run not yet recorded | [NeMo Guardrails](nvidia/nemo-guardrails.md#evaluation) |
 | Only the trusted-worker image is signed and scanned | [`containers/README.md`](../containers/README.md) |
 | Clean-host reproduction of the workspace not yet repeated | [Build guide](guides/build-and-reproduce.md) |
