@@ -1,4 +1,4 @@
-"""Trusted APIM inference transport with NeMo input, output, and execution rails."""
+"""Trusted APIM inference transport with NeMo input, topical, output, and execution rails."""
 
 import asyncio
 import json
@@ -184,7 +184,7 @@ def build_guardrails(*, base_url, api_key):
         raise ValueError('owned APIM guardrail route required')
     configuration = RailsConfig.from_content(colang_content=invoice_rails.COLANG, config={
         'models': [], 'colang_version': '1.0',
-        'rails': {'input': {'flows': ['self check input']}, **invoice_rails.rails_configuration()},
+        'rails': invoice_rails.rails_configuration(),
         'prompts': [{'task': 'self_check_input', 'content': CHECK_PROMPT},
                     {'task': 'self_check_output', 'content': invoice_rails.SELF_CHECK_OUTPUT_PROMPT}],
     })
