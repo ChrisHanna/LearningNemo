@@ -8,6 +8,8 @@ COPY --from=runtime /opt/venv /opt/venv
 COPY src/task_agent /opt/venv/lib/python3.12/site-packages/task_agent
 COPY configs/invoice-planning.yml configs/invoice-execution.yml /app/configs/
 RUN chmod -R a+rX /app /opt/venv && /opt/venv/bin/python -c "import nat; import task_agent.control.invoice_agent"
+# The invoice OpenShell policies use Landlock hard_requirement: every listed path must exist.
+RUN for path in /usr /bin /lib /lib64 /etc /opt/venv /app /var/log /proc /dev/urandom /tmp /usr/local/bin/python3.12; do test -e "$path"; done
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 NAT_TELEMETRY_ENABLED=false HOME=/tmp
 WORKDIR /tmp
 USER sandbox

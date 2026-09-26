@@ -15,7 +15,7 @@ filesystem_policy:
   read_write:
     - /tmp
 landlock:
-  compatibility: best_effort
+  compatibility: hard_requirement
 process:
   run_as_user: sandbox
   run_as_group: sandbox
@@ -26,7 +26,6 @@ network_policies:
       - host: ca-nemo-invoice-execution-dev.jollybeach-503c7ed1.eastus.azurecontainerapps.io
         port: 443
         protocol: rest
-        tls: terminate
         enforcement: enforce
         rules:
           - allow:
@@ -37,4 +36,3 @@ network_policies:
               path: /v2/invoice/inference/v1/chat/completions
     binaries:
       - path: /usr/local/bin/python3.12
-      - path: /usr/bin/curl
