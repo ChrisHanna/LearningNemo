@@ -415,6 +415,15 @@ bash infra/test-all-local.sh
 - `infra/deploy-gateway.sh --what-if` makes read-only Azure validation/preview
   requests; `--apply` is mutating and has the explicit acknowledgement above.
 
+### Continuous integration
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every pull
+request and on pushes to `main`: the agent configuration check, the full
+`pytest` suite, the local infrastructure gates (`infra/test-all-local.sh`,
+with the Azure CLI and the Bicep version from `toolchain.json`), and the
+browser JavaScript tests. It uses no Azure credentials and does not query or
+change Azure state. Deployment remains a manual, acknowledged operator step.
+
 ## Troubleshooting
 
 | Symptom | What to check |
