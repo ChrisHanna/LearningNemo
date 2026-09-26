@@ -9,7 +9,7 @@ SHOWCASE = {
     "summary": "A private workspace, three distinct sandbox policies, and application authority that stays outside the model.",
     "qualification": "Historical snapshot from 14 September 2026, not current cloud status. The runtime-lock failure below is from that deployment attempt; this record does not report today's VM, network, or approval-service health.",
     "milestones": [
-        {"label": "Private SAW", "value": "Bootstrap passed", "state": "passed", "icon": "server"},
+        {"label": "Private workspace VM", "value": "Bootstrap passed", "state": "passed", "icon": "server"},
         {"label": "OpenShell", "value": "3 MicroVMs", "state": "passed", "icon": "boxes"},
         {"label": "Temporary NAT", "value": "Removed", "state": "passed", "icon": "unplug"},
         {"label": "Runtime lock / 14 Sep attempt", "value": "Failed in this record", "state": "failed", "icon": "shield-alert"},
