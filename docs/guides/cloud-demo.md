@@ -4,8 +4,8 @@ This project's core purpose is demonstrating OpenShell sandboxes and
 per-sandbox MicroVM isolation inside the Secure Agent Workspace (SAW) — the
 managed envelope around a private workspace VM that runs the website's agent;
 see the
-[root README](../README.md#why-openshell-and-microvms-matter) and
-[ADR 0001](decisions/0001-openshell-microvm-driver.md) for that architecture.
+[OpenShell page](../nvidia/openshell.md) and
+[ADR 0001](../decisions/0001-openshell-microvm-driver.md) for that architecture.
 This guide covers the supporting cloud deployment: it moves the dashboard, its
 fixed workspace controller, and the existing NeMo task API into Azure so the
 sandbox demonstration and its supporting services are reachable without a
@@ -59,7 +59,7 @@ Do not describe that transport grant as an unprivileged sandbox identity.
 ## Build and Deploy
 
 The separate human-handoff services are now deployed alongside this three-service
-dashboard deployment. See the [live checkpoint](human-handoff-live-checkpoint.md)
+dashboard deployment. See the [live checkpoint](../archive/human-handoff-live-checkpoint.md)
 for verified SQL, identity, and ingress results and outstanding human rehearsal.
 Preserve the explicit incident/review origin settings when redeploying the
 dashboard; the default deployment does not enable them automatically.

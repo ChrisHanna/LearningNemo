@@ -1,5 +1,7 @@
 # Live Human Handoff Checkpoint
 
+> **Archived dated record.** This describes the state on the date it was recorded, not current status. See [Status](../status.md) and the [archive index](README.md).
+
 Later recovery work and final SAW/NAT cleanup are recorded in the
 [runtime recovery checkpoint](runtime-recovery-checkpoint.md). Its staged
 execution coordinator is not part of the deployed release described here.

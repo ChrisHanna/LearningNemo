@@ -1,5 +1,7 @@
 # Runtime Recovery and Execution Checkpoint
 
+> **Archived dated record.** This describes the state on the date it was recorded, not current status. See [Status](../status.md) and the [archive index](README.md).
+
 For subsequent recovery results, including the live passing Planning proof at
 2026-09-15 14:52:54 UTC and verified session cleanup, see
 [Runtime Diagnosis and Logs](diagnose-runtime.md). The sections below are the

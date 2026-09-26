@@ -1,12 +1,14 @@
 # Invoice Agent Implementation Checkpoint
 
+> **Archived dated record.** This describes the state on the date it was recorded, not current status. See [Status](../status.md) and the [archive index](README.md).
+
 ## Completed Hosted Workflow
 
 The invoice console is now live. The real two-agent rehearsal passed with a
 three-step model-authored plan, distinct Planning/Execution MicroVMs, three SQL
 receipts, and all five independent verification checks. Actual human approval is
 not claimed: the automated rehearsal used labelled synthetic reviewer metadata.
-See [invoice-demo.md](invoice-demo.md) for the current presentation workflow,
+See [invoice-demo.md](../guides/invoice-demo.md) for the current presentation workflow,
 observed run IDs, evidence provenance, operating deadlines, and known limits.
 
 All fourteen retained sandboxes were observed stopped. Real SQL tampered-hash

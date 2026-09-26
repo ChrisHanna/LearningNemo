@@ -121,7 +121,7 @@ controls only navigate the explanation; they do not execute an incident.
 Keyboard arrows navigate tab groups; Escape closes the document reader.
 
 The showcase data comes from the reviewed, non-secret
-[presentation manifest](../src/task_agent/console/showcase.py). It is a curated
+[presentation manifest](../../src/task_agent/console/showcase.py). It is a curated
 summary of the engineering record, not an import of current cloud state. The
 read-only endpoint makes no Azure calls and reads no private credential files.
 Its recorded failure and pending states remain visible even when the local
@@ -193,7 +193,7 @@ Show the three demonstration parts above and the current acceptance status.
 Explain that the workspace VM inside the SAW envelope is private and runs only
 the website's agent sandboxes, the OpenShell gateway uses mTLS, and each
 sandbox has a different policy. Show the
-[three policy files](../infra/next-phase/openshell) as configured intent, then
+[three policy files](../../infra/next-phase/openshell) as configured intent, then
 move to behavioral evidence.
 
 ### 0:45-2:30: Same Client, Different Authority
@@ -222,7 +222,7 @@ Do not rely on an improvised prompt producing a specific response.
 
 Show selected, sanitized bootstrap evidence and the matching policy file.
 The successful preserved-VM run was recorded on 2026-09-14; its locations are
-listed in the [diagnostic record](openshell-bootstrap-diagnostic-record.md).
+listed in the [diagnostic record](../archive/openshell-bootstrap-diagnostic-record.md).
 
 | Attempt in the bootstrap probes | Expected observation | Interpretation |
 | --- | --- | --- |

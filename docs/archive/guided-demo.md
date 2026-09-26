@@ -1,5 +1,7 @@
 # Guided Security Demonstration
 
+> **Archived dated record.** This describes the state on the date it was recorded, not current status. See [Status](../status.md) and the [archive index](README.md).
+
 ## Current Workflow
 
 The deployed screen is **Analyze -> Propose -> Approve -> Execute -> Verify**.

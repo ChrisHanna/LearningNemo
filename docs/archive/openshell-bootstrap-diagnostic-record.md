@@ -1,5 +1,7 @@
 # OpenShell Bootstrap Diagnostic Record
 
+> **Archived dated record.** This describes the state on the date it was recorded, not current status. See [Status](../status.md) and the [archive index](README.md).
+
 ## Scope
 
 This record covers the live Azure diagnosis of the OpenShell `0.0.116`

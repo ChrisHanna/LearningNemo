@@ -1,7 +1,7 @@
 # LearningNeMo Next-Phase Infrastructure
 
 This directory implements the Azure infrastructure from the
-[next-phase specification](../../docs/next-phase-saw-openshell-spec.md):
+[next-phase specification](../../docs/specification/next-phase-saw-openshell-spec.md):
 
 - WP0 preflight and the WP1 Azure network foundation;
 - the WP2a trusted platform base and WP2b Entra audiences and least-authority
@@ -15,9 +15,9 @@ This directory implements the Azure infrastructure from the
 
 Sections below describe WP0-WP3 in detail. The later layers are listed under
 [Workspace, Cloud Demo, and Invoice Layers](#workspace-cloud-demo-and-invoice-layers)
-and documented in the [build guide](../../docs/build-and-reproduce.md),
-[cloud demo guide](../../docs/cloud-demo.md), and
-[invoice demo guide](../../docs/invoice-demo.md).
+and documented in the [build guide](../../docs/guides/build-and-reproduce.md),
+[cloud demo guide](../../docs/guides/cloud-demo.md), and
+[invoice demo guide](../../docs/guides/invoice-demo.md).
 
 ## Current Claim
 
@@ -36,9 +36,9 @@ independent SQL verification. Clean-host reproducibility remains pending. This
 is not yet a complete reference-aligned SAW; recorded results are not current
 health.
 
-The [build guide](../../docs/build-and-reproduce.md) connects these infrastructure
+The [build guide](../../docs/guides/build-and-reproduce.md) connects these infrastructure
 phases to local setup, image evidence, SAW deployment, and cleanup. The
-[capability runbook](../../docs/capability-demo.md) describes what to show live,
+[capability runbook](../../docs/guides/capability-demo.md) describes what to show live,
 what to present as recorded evidence, and which claims remain pending.
 
 ## What These Slices Create
@@ -362,7 +362,7 @@ connections without changing the NSG rules above.
 The IMDS deny (121) also blocks the host's own cloud-init. Starting the VM
 therefore uses a guarded maintenance path that temporarily removes only that
 rule on a deallocated VM and restores it before sandbox admission (see
-[runtime diagnosis](../../docs/diagnose-runtime.md)).
+[runtime diagnosis](../../docs/archive/diagnose-runtime.md)).
 
 What this does and does not provide:
 

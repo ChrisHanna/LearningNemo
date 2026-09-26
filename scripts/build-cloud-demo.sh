@@ -25,7 +25,7 @@ tar -C "$root" --exclude='__pycache__' --exclude='*.pyc' -cf - \
   containers/cloud-human.Dockerfile containers/human-services.requirements.lock \
   scripts/apply-human-migrations.py scripts/verify-invoice-sql.py scripts/apply-invoice-migrations.py infra/next-phase/review-service \
   configs/agent.yml scripts/run-cloud-agent.py src pyproject.toml README.md \
-  docs/build-and-reproduce.md docs/capability-demo.md docs/openshell-bootstrap-diagnostic-record.md | tar -C "$stage" -xf -
+  docs/guides/build-and-reproduce.md docs/guides/capability-demo.md docs/archive/openshell-bootstrap-diagnostic-record.md | tar -C "$stage" -xf -
 revision="$(find "$stage" -type f -print0 | sort -z | xargs -0 sha256sum | sed "s|$stage/||" | sha256sum | cut -d' ' -f1)"
 for kind in "${kinds[@]}"; do
   image="learningnemo/cloud-$kind:source-${revision:0:16}"

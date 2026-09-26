@@ -2,7 +2,7 @@
 
 This is the operator build guide. For the presentation, use the
 [capability demonstration runbook](capability-demo.md). For design intent, use
-the [SAW specification](next-phase-saw-openshell-spec.md); it includes planned
+the [SAW specification](../specification/next-phase-saw-openshell-spec.md); it includes planned
 work and is not a completion report.
 
 ## Status and Acceptance
@@ -20,7 +20,7 @@ Recorded on 2026-09-14:
 Later records supersede parts of this table. On 2026-09-15 the runtime lock was
 repaired, an owned runtime NAT gateway was attached for approved egress, and a
 fixed Planning proof passed under lockdown
-([runtime diagnosis](diagnose-runtime.md)). On 2026-09-16 the invoice workflow
+([runtime diagnosis](../archive/diagnose-runtime.md)). On 2026-09-16 the invoice workflow
 ran real Planning and Execution agents in separate OpenShell MicroVMs through
 approval, broker receipts, and independent SQL verification
 ([invoice demo](invoice-demo.md#observed-acceptance)). A clean-host
@@ -44,7 +44,7 @@ bash infra/test-all-local.sh
 ```
 
 Install `uv`, Azure CLI, and Bicep before these commands. The authoritative
-minimums and tested versions are in [toolchain.json](../infra/next-phase/toolchain.json).
+minimums and tested versions are in [toolchain.json](../../infra/next-phase/toolchain.json).
 The last deployment used Python 3.12, Azure CLI 2.90.0, Bicep 0.47.16, and Bash
 5.2. These are recorded versions, not instructions to ignore the toolchain gate.
 
@@ -63,8 +63,8 @@ must also pass. No command in this guide creates a new subscription or tenant.
 
 ## 2. Build the Local Agent Experience
 
-Follow the root README's [Entra configuration](../README.md#configure-entra) and
-[LLM gateway deployment](../README.md#deploy-the-llm-gateway). They establish the
+Follow the local walkthrough's [Entra configuration](local-authorization.md#configure-entra) and
+[LLM gateway deployment](local-authorization.md#deploy-the-llm-gateway). They establish the
 public test client, two account role assignments, APIM operations, and Key Vault
 configuration. Use the checked-in preview and apply workflows, not portal edits.
 
@@ -92,16 +92,16 @@ incident workflow and are not evidence that the agent runs inside OpenShell.
 
 ## 3. Establish the Azure Dependencies
 
-Review the [infrastructure operator guide](../infra/next-phase/README.md) for
+Review the [infrastructure operator guide](../../infra/next-phase/README.md) for
 configuration, resource inventory, permissions, and per-layer cleanup.
 The initial dependency order is:
 
 | Stage | Entry point | Expected outcome |
 | --- | --- | --- |
-| Network foundation | [deploy-foundation.sh](../infra/next-phase/deploy-foundation.sh) | Tagged platform/SAW networking with no VM |
-| Budget | [deploy-budget.sh](../infra/next-phase/deploy-budget.sh) | Notified subscription budget within the configured ceiling |
-| Persistent identities | [deploy-identities.sh](../infra/next-phase/deploy-identities.sh) | Six distinct regional service identities |
-| Trusted services | [reconcile-wp3.sh](../infra/next-phase/reconcile-wp3.sh) | SQL, private network, ACR, runtime, signed image, audiences, migrations, workers |
+| Network foundation | [deploy-foundation.sh](../../infra/next-phase/deploy-foundation.sh) | Tagged platform/SAW networking with no VM |
+| Budget | [deploy-budget.sh](../../infra/next-phase/deploy-budget.sh) | Notified subscription budget within the configured ceiling |
+| Persistent identities | [deploy-identities.sh](../../infra/next-phase/deploy-identities.sh) | Six distinct regional service identities |
+| Trusted services | [reconcile-wp3.sh](../../infra/next-phase/reconcile-wp3.sh) | SQL, private network, ACR, runtime, signed image, audiences, migrations, workers |
 
 Preview and review the foundation, budget, and identity phases using their
 operator instructions. Their apply acknowledgements are respectively
@@ -109,7 +109,7 @@ operator instructions. Their apply acknowledgements are respectively
 results before advancing to WP3.
 
 The image build needs the checksum-verified tools installed by
-[install-supply-chain-tools.sh](../scripts/install-supply-chain-tools.sh).
+[install-supply-chain-tools.sh](../../scripts/install-supply-chain-tools.sh).
 For a full trusted-service build, after those prerequisites:
 
 ```bash
@@ -127,13 +127,13 @@ Entra policy, and runs migrations. It is not a lightweight lease renewal.
 
 ### What the Image Build Proves
 
-[build-trusted-image.sh](../scripts/build-trusted-image.sh) builds remotely in
+[build-trusted-image.sh](../../scripts/build-trusted-image.sh) builds remotely in
 ACR from digest-pinned bases and a hashed source context. It resolves an immutable
 image digest, generates a CycloneDX SBOM and vulnerability report, checks native
 ELF dependencies, signs and verifies a detached image-reference payload, and
 binds the evidence to the approval schema and source revision.
 
-The release is accepted by [workload_release.py](../infra/next-phase/workload_release.py)
+The release is accepted by [workload_release.py](../../infra/next-phase/workload_release.py)
 before deployment. A valid signature does not prove absence of vulnerabilities;
 the scan gate is a separate check. Do not invent attestations, replace a partial
 signing trust root, or call a mutable tag reproducible. If the source changes,
@@ -165,12 +165,12 @@ Source ownership is deliberately small:
 
 | File | Responsibility |
 | --- | --- |
-| [dev.workspace.config.json](../infra/next-phase/environments/dev.workspace.config.json) | VM/image/version/hash/resource bounds |
-| [workspace.bicep](../infra/next-phase/workspace.bicep) | Private Trusted Launch VM, NIC, no-RBAC identity |
-| [workspace-openshell-bootstrap.bicep](../infra/next-phase/workspace-openshell-bootstrap.bicep) | Render policy hosts and the bounded run command |
-| [bootstrap-saw-openshell.sh](../scripts/bootstrap-saw-openshell.sh) | Verify package, configure mTLS, create three sandboxes, test boundaries, arm expiry |
-| [workspace-runtime-lock.bicep](../infra/next-phase/workspace-runtime-lock.bicep) | Post-bootstrap host network restrictions |
-| [verify_workspace.py](../infra/next-phase/verify_workspace.py) | Independent infrastructure and runtime evidence validation |
+| [dev.workspace.config.json](../../infra/next-phase/environments/dev.workspace.config.json) | VM/image/version/hash/resource bounds |
+| [workspace.bicep](../../infra/next-phase/workspace.bicep) | Private Trusted Launch VM, NIC, no-RBAC identity |
+| [workspace-openshell-bootstrap.bicep](../../infra/next-phase/workspace-openshell-bootstrap.bicep) | Render policy hosts and the bounded run command |
+| [bootstrap-saw-openshell.sh](../../scripts/bootstrap-saw-openshell.sh) | Verify package, configure mTLS, create three sandboxes, test boundaries, arm expiry |
+| [workspace-runtime-lock.bicep](../../infra/next-phase/workspace-runtime-lock.bicep) | Post-bootstrap host network restrictions |
+| [verify_workspace.py](../../infra/next-phase/verify_workspace.py) | Independent infrastructure and runtime evidence validation |
 
 The recorded configuration pins OpenShell `0.0.116`, the Debian package hash,
 both OCI image digests, Ubuntu image version, and `Standard_D2s_v5`. The host has
@@ -179,7 +179,7 @@ and image pulls use a temporary bootstrap NAT and registry rule, which must be
 removed before completion. Runtime egress then uses a separate owned NAT gateway
 (`workspace-runtime-egress.bicep`) under the runtime-lock NSG rules. The
 network stages are described in the
-[infrastructure README](../infra/next-phase/README.md#security-properties).
+[infrastructure README](../../infra/next-phase/README.md#security-properties).
 
 **Status (updated 2026-09-15):** the runtime-lock rule was repaired and
 independent host verification passed. Approved runtime connectivity was then
@@ -211,7 +211,7 @@ The clean workflow requires the SAW resource group in exact network-foundation
 state, not a preserved VM. Do not delete a diagnostic VM simply to pass that
 preflight. Inspect and preserve its evidence first. There is currently no
 general `--resume` flag. The bounded retry performed in this investigation is
-documented in the [diagnostic record](openshell-bootstrap-diagnostic-record.md).
+documented in the [diagnostic record](../archive/openshell-bootstrap-diagnostic-record.md).
 
 A complete build requires all of the following, not just exit zero from a CLI:
 

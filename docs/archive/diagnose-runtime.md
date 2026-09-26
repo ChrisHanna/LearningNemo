@@ -1,5 +1,7 @@
 # Runtime Diagnosis and Logs
 
+> **Archived dated record.** This describes the state on the date it was recorded, not current status. See [Status](../status.md) and the [archive index](README.md).
+
 For the latest single-screen dashboard, the reproduced agent 422 and worker
 credential fix, and the owner's no-deletion hold, see [Guided Demo](guided-demo.md).
 Do not follow earlier cleanup recommendations until the owner authorizes them.

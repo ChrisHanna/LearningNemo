@@ -1243,7 +1243,7 @@ Exit criteria:
 
 ### WP1. Azure Network Foundation
 
-Implementation: [`infra/next-phase`](../infra/next-phase/README.md)
+Implementation: [`infra/next-phase`](../../infra/next-phase/README.md)
 
 Tasks:
 
@@ -1265,7 +1265,7 @@ Exit criteria:
 
 ### WP2. Trusted Azure Platform
 
-WP2a/WP3 implementation: [`infra/next-phase`](../infra/next-phase/README.md). The
+WP2a/WP3 implementation: [`infra/next-phase`](../../infra/next-phase/README.md). The
 minimum slice is split into WP2a-I and WP2a-R. WP2a-I persistently creates six
 service-specific regional managed identities without compute. WP2a-R may create
 one empty external workload-profile Container Apps environment on the WP1
