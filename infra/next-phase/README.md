@@ -377,6 +377,30 @@ What this does and does not provide:
   Firewall Premium perimeter are therefore not provided. This is a lower-cost
   substitute, not a reference-aligned SAW perimeter.
 
+### Provider-mediated run capability (opt-in)
+
+By default each invoice run's capability is delivered to the sandbox agent.
+With provider mode, the VM host mints it into an OpenShell provider bound by
+`openshell/invoice-<kind>-provider-profile.yaml` to that role's gateway
+routes. The agent sees only an `openshell:resolve:env:` placeholder, and only
+the capability's SHA-256 hash leaves the VM. Stopping the run expires the
+credential.
+
+To enable it, rebuild and redeploy the invoice services image (it now carries
+the two profiles), then run the services deployment with the mode set:
+
+```bash
+LEARNINGNEMO_INVOICE_CREDENTIAL_MODE=provider LEARNINGNEMO_AZURE_APPLY=invoice-services \
+  python3 infra/next-phase/deploy_invoice_services.py services
+```
+
+The first prepared run imports each profile into the gateway once and refuses
+to continue if an existing profile's credential binding has drifted. Verify
+one Planning and Execution cycle and the boundary challenges before keeping
+it on; to roll back, redeploy without the variable (the default is
+`manifest`). Providers of deleted sandboxes are not yet garbage-collected;
+their credentials are already expired.
+
 The Container Apps subnet uses the current workload-profile requirements:
 
 - dedicated to Container Apps;

@@ -7,6 +7,9 @@ param agentImage string
 param expiresAt string = ''
 @allowed(['leased', 'operator-managed'])
 param availabilityMode string = 'leased'
+@description('manifest: the run capability is delivered to the sandbox agent. provider: an OpenShell provider holds it and the agent sees only a placeholder.')
+@allowed(['manifest', 'provider'])
+param credentialMode string = 'manifest'
 param tenantId string
 param apiClientId string
 param publicClientId string
@@ -59,6 +62,7 @@ resource apps 'Microsoft.App/containerApps@2025-01-01' = [for (kind,index) in ki
           { name: 'LEARNINGNEMO_SQL_DATABASE', value: 'learningnemo' }
           { name: 'INVOICE_EXPIRES_AT', value: expiresAt }
           { name: 'INVOICE_AVAILABILITY_MODE', value: availabilityMode }
+          { name: 'INVOICE_CREDENTIAL_MODE', value: credentialMode }
           { name: 'INVOICE_AGENT_IMAGE', value: agentImage }
           { name: 'INVOICE_OPERATOR_OBJECT_ID', value: identities[0].properties.principalId }
           { name: 'INVOICE_VERIFIER_AUDIENCE', value: 'api://${apiClientId}' }

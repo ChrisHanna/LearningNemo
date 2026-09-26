@@ -82,7 +82,7 @@ unverified end-to-end.
 | Separate sponsor, workspace, logical-agent, and runtime-agent identities | Entra human roles, AgentRunner logical identity, per-sandbox runtime capability | Designed; AgentRunner delegation integration partially pending |
 | Governed connectors with human review for sensitive writes | Capability-authenticated invoice tool gateways, SQL broker enforcing the exact approved plan, independent verifier, separate Approver | Implemented; sandbox Planning -> approval -> sandbox Execution -> verification recorded on 2026-09-16 with a synthetic reviewer, and the Approver UI validated on 2026-09-19 ([invoice demo](docs/invoice-demo.md)) |
 | Brokered interactive access (enterprise SSO) | Not yet implemented | Gap |
-| Runtime credential mediation | Model credential held by a trusted gateway; general OpenShell credential mediation not yet complete | Partial |
+| Runtime credential mediation | Model credential held by a trusted gateway. Opt-in provider mode (`INVOICE_CREDENTIAL_MODE=provider`) mints each run capability on the VM host into an OpenShell provider, so the sandbox agent sees only a placeholder that the proxy resolves for its own gateway routes | Partial; provider mode implemented but not yet verified live, so the default still delivers the capability to the agent |
 | Workspace perimeter | NSGs plus OpenShell egress policy | Lower-cost substitute; not the reference design's Azure Firewall Premium perimeter |
 | Signed-policy governance and signed delegation record | The trusted-worker image is signed and attested; other images are digest-pinned only; sandbox policies and engagement delegations are not signed | Gap |
 | Kill switch outside the agent's control | Control-plane VM stop, per-run capability revocation, sandbox stop, and a root-owned admission gate (`/etc/learningnemo/invoice-availability.json`) | Partial; revocation is not yet bound to a signed delegation |
@@ -414,6 +414,15 @@ bash infra/test-all-local.sh
 - The live console/client exercises Entra, APIM/Key Vault, and model calls.
 - `infra/deploy-gateway.sh --what-if` makes read-only Azure validation/preview
   requests; `--apply` is mutating and has the explicit acknowledgement above.
+
+### Continuous integration
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every pull
+request and on pushes to `main`: the agent configuration check, the full
+`pytest` suite, the local infrastructure gates (`infra/test-all-local.sh`,
+with the Azure CLI and the Bicep version from `toolchain.json`), and the
+browser JavaScript tests. It uses no Azure credentials and does not query or
+change Azure state. Deployment remains a manual, acknowledged operator step.
 
 ## Troubleshooting
 

@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python tests and infrastructure gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      NAT_TELEMETRY_ENABLED: "false"
+      PYTHONDONTWRITEBYTECODE: "1"
+      LEARNINGNEMO_TEST_PYTHON: ${{ github.workspace }}/.venv/bin/python
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.12.13"
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install locked dependencies
+        run: uv sync --frozen
+
+      - name: Install Bicep
+        # Version recorded as tested in infra/next-phase/toolchain.json. No Azure login is used.
+        run: |
+          az bicep install --version v0.47.16
+          az version --output table
+          az bicep version
+
+      - name: Validate agent configuration
+        run: .venv/bin/python scripts/validate-agent-config.py
+
+      - name: Run Python tests
+        run: .venv/bin/python -m pytest -q
+
+      - name: Run local infrastructure gates
+        # Compiles and policy-checks templates only; Azure state is not queried or changed.
+        run: bash infra/test-all-local.sh
+
+  javascript:
+    name: Browser JavaScript tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Run node tests
+        run: node --test tests/*.test.cjs

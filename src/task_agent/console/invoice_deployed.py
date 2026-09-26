@@ -81,7 +81,7 @@ def main():
     elif kind=='operator':
         from azure.mgmt.compute import ComputeManagementClient
         compute=ComputeManagementClient(credential,os.environ['AZURE_SUBSCRIPTION_ID'],polling_interval=3)
-        runtime=AzureInvoiceRuntime(compute_client=compute,image=os.environ['INVOICE_AGENT_IMAGE'],policies=Path('/app/invoice-policies'),availability_mode=availability_mode)
+        runtime=AzureInvoiceRuntime(compute_client=compute,image=os.environ['INVOICE_AGENT_IMAGE'],policies=Path('/app/invoice-policies'),availability_mode=availability_mode,credential_mode=os.environ.get('INVOICE_CREDENTIAL_MODE','manifest'))
         verifier=RemoteInvoiceVerifier(http,credential,os.environ['INVOICE_VERIFIER_AUDIENCE'])
         jobs=InvoiceJobs(sql,None)
         observer=RemoteInvoiceObserver(http,credential,os.environ['INVOICE_VERIFIER_AUDIENCE'])

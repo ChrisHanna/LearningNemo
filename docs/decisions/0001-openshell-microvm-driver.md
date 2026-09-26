@@ -61,6 +61,18 @@ stronger inner isolation boundary when Azure nested virtualization is present.
   `tls: terminate`, which OpenShell v0.0.116 accepts but treats as a deprecated
   no-op (TLS is auto-detected and terminated). Apply the invoice hardening to
   them only together with a full rebootstrap.
-- The per-run capability is still visible to the agent process inside the
-  sandbox. OpenShell providers could inject it at the proxy instead; that
-  runtime credential mediation remains outstanding.
+- Per-run capability mediation through OpenShell providers is implemented as an
+  opt-in mode (`credentialMode=provider` in `invoice-services.bicep`, set by
+  `LEARNINGNEMO_INVOICE_CREDENTIAL_MODE=provider` when running
+  `deploy_invoice_services.py`). The VM host mints the capability, stores it in
+  a per-run provider (`invoice-run-<run id>`) whose profile
+  (`openshell/invoice-<kind>-provider-profile.yaml`) binds it to the role's
+  gateway routes, attaches it at sandbox creation, and returns only its SHA-256
+  hash for SQL admission. The raw value never passes through Run Command
+  output, the controller, or the sandbox; the agent receives an
+  `openshell:resolve:env:` placeholder and refuses to run with anything else.
+  Stopping the run sets the credential's expiry in the past, so a retained
+  sandbox cannot reuse it. The default remains `manifest` (capability delivered
+  to the agent) until one live Planning and Execution cycle verifies provider
+  mode on the pinned OpenShell release. Providers of deleted sandboxes are not
+  yet garbage-collected; their credentials are already expired.

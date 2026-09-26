@@ -17,15 +17,31 @@ from task_agent.control.invoice_contract import Identifier, InvoicePlan, Invoice
 from task_agent.control.invoice_repository import capability_context
 
 
+# In provider mode the run capability never enters the sandbox: OpenShell holds it in a
+# provider and exposes only this placeholder, which its proxy resolves for the bound gateway.
+CAPABILITY_ENV = 'INVOICE_RUN_CAPABILITY'
+PLACEHOLDER_PREFIX = 'openshell:resolve:env:'
+
+
 class RunManifest(BaseModel):
     model_config = ConfigDict(extra='forbid', frozen=True)
     kind: Literal['planning', 'execution']
     run_id: Identifier
     sandbox_id: Identifier
     gateway_origin: str
-    capability: SecretStr
+    capability: SecretStr | None = None
     expires_at: str
     plan: InvoicePlan | None = None
+
+
+def run_credential(manifest, environment=os.environ):
+    """Return the manifest capability, or the OpenShell placeholder when the provider holds it."""
+    if manifest.capability is not None:
+        return manifest.capability.get_secret_value()
+    placeholder = environment.get(CAPABILITY_ENV, '')
+    if not (placeholder.startswith(PLACEHOLDER_PREFIX) and placeholder.endswith(CAPABILITY_ENV)):
+        raise ValueError('provider-mediated run capability placeholder required')
+    return placeholder
 
 
 class EmptyInput(BaseModel):
@@ -33,8 +49,9 @@ class EmptyInput(BaseModel):
 
 
 class AgentSession:
-    def __init__(self, manifest, client, emit):
+    def __init__(self, manifest, client, emit, credential=None):
         self.manifest, self.client, self.emit = manifest, client, emit
+        self.credential = credential or run_credential(manifest)
         self.calls = 0
         self.decision = None
         self.receipts = []
@@ -48,7 +65,7 @@ class AgentSession:
         self.emit('tool-requested', tool=tool, source='agent-runtime')
         try:
             response = await self.client.post(self.manifest.gateway_origin + '/v2/invoice/tools/' + tool,
-                headers={'Authorization': 'Bearer ' + self.manifest.capability.get_secret_value()}, json=body or {}, timeout=30)
+                headers={'Authorization': 'Bearer ' + self.credential}, json=body or {}, timeout=30)
         except httpx.HTTPError:
             self.stopped = True
             self.emit('tool-unconfirmed', tool=tool, source='agent-runtime', reason='transport-error')
@@ -125,9 +142,10 @@ def validate_manifest(manifest, *, now=None):
     expected = f'ca-nemo-invoice-{manifest.kind}-dev.jollybeach-503c7ed1.eastus.azurecontainerapps.io'
     if manifest.gateway_origin != 'https://' + expected or parsed.hostname != expected:
         raise ValueError('fixed invoice mediation origin required')
-    run_id, _ = capability_context(manifest.capability.get_secret_value())
-    if run_id != manifest.run_id:
-        raise ValueError('capability run differs')
+    if manifest.capability is not None:
+        run_id, _ = capability_context(manifest.capability.get_secret_value())
+        if run_id != manifest.run_id:
+            raise ValueError('capability run differs')
     expiry = datetime.fromisoformat(manifest.expires_at.replace('Z', '+00:00'))
     if expiry.tzinfo is None or not 0 < (expiry - (now or datetime.now(UTC))).total_seconds() <= 900:
         raise ValueError('bounded run lease required')
@@ -147,7 +165,8 @@ async def run_agent(manifest, config_directory):
     from nat.runtime.loader import load_config
     register_tools()
     os.environ['INVOICE_MODEL_BASE_URL'] = manifest.gateway_origin + '/v2/invoice/inference/v1'
-    os.environ['OPENAI_API_KEY'] = manifest.capability.get_secret_value()
+    credential = run_credential(manifest)
+    os.environ['OPENAI_API_KEY'] = credential
     sequence = 0
 
     def emit(event_type, **values):
@@ -158,7 +177,7 @@ async def run_agent(manifest, config_directory):
 
     config = load_config(config_directory / ('invoice-' + manifest.kind + '.yml'))
     async with httpx.AsyncClient(follow_redirects=False, trust_env=True) as client:
-        session = AgentSession(manifest, client, emit)
+        session = AgentSession(manifest, client, emit, credential)
         token = SESSION.set(session)
         try:
             emit('agent-started', source='agent-runtime', uid=os.getuid())
