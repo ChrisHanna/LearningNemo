@@ -6,6 +6,8 @@ param registryServer string
 @secure()
 param consoleImage string
 @secure()
+param controllerImage string
+@secure()
 param agentImage string
 param identityIds array
 param clientIds array
@@ -22,10 +24,16 @@ param incidentOrigin string = ''
 param executionOrigin string = ''
 param invoiceOperatorOrigin string = ''
 param invoiceReviewOrigin string = ''
+param publicDemoOrigin string = 'https://learningnemo.ai'
+param serviceOpsOperatorOrigin string = ''
+param serviceOpsReviewOrigin string = ''
+param invoiceAgentsPreviewEnabled string = 'false'
+param publicDemoCertificateId string = ''
 
 var dashboardName = 'ca-learningnemo-dashboard-dev'
 var controllerName = 'ca-learningnemo-controller-dev'
 var agentName = 'ca-learningnemo-agent-dev'
+var publicDemoName = 'ca-learningnemo-public-demo-dev'
 var entra = [
   { name: 'ENTRA_TENANT_ID', value: tenantId }
   { name: 'ENTRA_CLIENT_ID', value: apiClientId }
@@ -42,22 +50,55 @@ var services = [
     cpu: '0.5'
     memory: '1Gi'
     health: '/healthz'
+    customDomains: []
     env: concat(entra, [
+      { name: 'AZURE_CLIENT_ID', value: clientIds[0] }
       { name: 'LEARNINGNEMO_PUBLIC_ORIGIN', value: 'https://${dashboardName}.${environmentDomain}' }
       { name: 'LEARNINGNEMO_CONTROLLER_ORIGIN', value: 'https://${controllerName}.internal.${environmentDomain}' }
       { name: 'LEARNINGNEMO_CLOUD_AGENT_URL', value: 'https://${agentName}.internal.${environmentDomain}/v1/chat/completions' }
-    ], empty(reviewOrigin) ? [] : [{ name: 'LEARNINGNEMO_REVIEW_ORIGIN', value: reviewOrigin }], empty(incidentOrigin) ? [] : [{ name: 'LEARNINGNEMO_INCIDENT_ORIGIN', value: incidentOrigin }], empty(executionOrigin) ? [] : [{ name: 'LEARNINGNEMO_EXECUTION_ORIGIN', value: executionOrigin }], empty(invoiceOperatorOrigin) ? [] : [{ name: 'LEARNINGNEMO_INVOICE_OPERATOR_ORIGIN', value: invoiceOperatorOrigin }, { name: 'LEARNINGNEMO_INVOICE_REVIEW_ORIGIN', value: invoiceReviewOrigin }])
+      { name: 'INVOICE_AGENTS_PREVIEW_ENABLED', value: invoiceAgentsPreviewEnabled }
+    ], empty(reviewOrigin) ? [] : [{ name: 'LEARNINGNEMO_REVIEW_ORIGIN', value: reviewOrigin }], empty(incidentOrigin) ? [] : [{ name: 'LEARNINGNEMO_INCIDENT_ORIGIN', value: incidentOrigin }], empty(executionOrigin) ? [] : [{ name: 'LEARNINGNEMO_EXECUTION_ORIGIN', value: executionOrigin }], empty(invoiceOperatorOrigin) ? [] : [{ name: 'LEARNINGNEMO_INVOICE_OPERATOR_ORIGIN', value: invoiceOperatorOrigin }, { name: 'LEARNINGNEMO_INVOICE_REVIEW_ORIGIN', value: invoiceReviewOrigin }], empty(serviceOpsOperatorOrigin) ? [] : [
+      { name: 'LEARNINGNEMO_SERVICEOPS_OPERATOR_ORIGIN', value: serviceOpsOperatorOrigin }
+      { name: 'LEARNINGNEMO_SERVICEOPS_REVIEW_ORIGIN', value: serviceOpsReviewOrigin }
+    ])
+  }
+  {
+    name: publicDemoName
+    identity: identityIds[3]
+    image: consoleImage
+    command: ['python', '-m', 'task_agent.console.cloud']
+    port: 8080
+    external: true
+    cpu: '0.5'
+    memory: '1Gi'
+    health: '/healthz'
+    customDomains: empty(publicDemoCertificateId) ? [] : [{
+      name: 'learningnemo.ai'
+      bindingType: 'SniEnabled'
+      certificateId: publicDemoCertificateId
+    }]
+    env: concat(entra, [
+      { name: 'AZURE_CLIENT_ID', value: clientIds[3] }
+      { name: 'LEARNINGNEMO_AUTH_MODE', value: 'public-demo' }
+      { name: 'LEARNINGNEMO_PUBLIC_ORIGIN', value: publicDemoOrigin }
+      { name: 'LEARNINGNEMO_CONTROLLER_ORIGIN', value: 'https://${controllerName}.internal.${environmentDomain}' }
+      { name: 'LEARNINGNEMO_CLOUD_AGENT_URL', value: 'https://${agentName}.internal.${environmentDomain}/v1/chat/completions' }
+    ], empty(invoiceOperatorOrigin) ? [] : [
+      { name: 'LEARNINGNEMO_INVOICE_OPERATOR_ORIGIN', value: invoiceOperatorOrigin }
+      { name: 'LEARNINGNEMO_INVOICE_REVIEW_ORIGIN', value: invoiceReviewOrigin }
+    ])
   }
   {
     name: controllerName
     identity: identityIds[1]
-    image: consoleImage
+    image: controllerImage
     command: ['python', '-m', 'task_agent.console.cloud_controller']
     port: 8080
     external: false
     cpu: '0.5'
     memory: '1Gi'
     health: '/healthz'
+    customDomains: []
     env: concat(entra, [
       { name: 'AZURE_CLIENT_ID', value: clientIds[1] }
       { name: 'AZURE_SUBSCRIPTION_ID', value: subscription().subscriptionId }
@@ -73,6 +114,7 @@ var services = [
     cpu: '2.0'
     memory: '4Gi'
     health: '/health'
+    customDomains: []
     env: concat(entra, [
       { name: 'AZURE_CLIENT_ID', value: clientIds[2] }
       { name: 'LEARNINGNEMO_GATEWAY_VAULT', value: vaultName }
@@ -103,6 +145,7 @@ resource apps 'Microsoft.App/containerApps@2025-01-01' = [for service in service
         targetPort: service.port
         transport: 'auto'
         stickySessions: { affinity: 'sticky' }
+        customDomains: service.customDomains
       }
       registries: [{ server: registryServer, identity: service.identity }]
       secrets: []
@@ -125,3 +168,5 @@ resource apps 'Microsoft.App/containerApps@2025-01-01' = [for service in service
   }
 }]
 output dashboardUrl string = 'https://${dashboardName}.${environmentDomain}'
+output publicDemoName string = publicDemoName
+output publicDemoFqdn string = '${publicDemoName}.${environmentDomain}'

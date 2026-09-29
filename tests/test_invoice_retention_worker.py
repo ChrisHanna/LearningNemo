@@ -22,6 +22,13 @@ async def test_sweep_uses_only_closed_read_and_compilable_fixed_host_script():
     assert calls == [('control.usp_read_invoice_retention', {})]
 
 
+def test_retention_preview_retries_only_read_only_transport():
+    from pathlib import Path
+    source=(Path(__file__).parents[1]/'infra/next-phase/configure_invoice_retention.py').read_text()
+    assert "read_only=args.action == 'preview'" in source
+    assert "sweep_code(args.action == 'run')" in source
+
+
 async def test_full_inventory_receipt_fits_azure_output_limit():
     from uuid import uuid4
     expected={'status':'preview','deleted':[],'remaining_count':24,'sandboxes':[
@@ -58,7 +65,7 @@ async def test_manager_requires_confirmed_archive_and_exact_deletion(monkeypatch
 
 
 async def test_pre_run_cleanup_drains_confirmed_batches_before_admission(monkeypatch):
-    counts=[18,16,14]
+    counts=[18,16,14,12]
     calls=[]
     async def sweep(runtime,client,**options):
         before=counts[len(calls)];calls.append(before)

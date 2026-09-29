@@ -76,6 +76,16 @@ BASE_RULES = {
     "deny-direct-azure-sql": (120, "Outbound", "Sql"),
 }
 
+OPTIONAL_RULES = {
+    "allow-invoice-agents-api-https": (
+        129,
+        "Allow",
+        frozenset({"104.18.32.47/32", "162.159.140.245/32", "172.64.155.209/32", "172.66.0.243/32"}),
+        "443",
+        "Tcp",
+    ),
+}
+
 
 def utc_now() -> str:
     return dt.datetime.now(dt.UTC).isoformat(timespec="seconds")
@@ -95,8 +105,9 @@ def cloud_snapshot(vm: dict, stack: dict, rules: list, subnet: dict, runtime_nat
     if operator_managed:
         valid_lease = (vm.get('tags') or {}).get('admission') == 'enabled'
     observed = {rule.get("name"): rule for rule in rules}
-    expected_names = set(RULES) | set(BASE_RULES)
-    rules_match = set(observed) == expected_names and len(observed) == len(rules) and all(
+    required_names = set(RULES) | set(BASE_RULES)
+    optional_names = set(observed) & set(OPTIONAL_RULES)
+    rules_match = set(observed) == required_names | optional_names and len(observed) == len(rules) and all(
         name in observed and (
             observed[name].get("priority"), observed[name].get("access"),
             observed[name].get("destinationAddressPrefix"), observed[name].get("destinationPortRange"),
@@ -112,6 +123,20 @@ def cloud_snapshot(vm: dict, stack: dict, rules: list, subnet: dict, runtime_nat
         and observed[name].get("access") == "Deny"
         and all(observed[name].get(field) == "*" for field in ("protocol", "sourceAddressPrefix", "sourcePortRange", "destinationPortRange"))
         for name, expected in BASE_RULES.items()
+    )
+    rules_match = rules_match and all(
+        (
+            observed[name].get("priority"),
+            observed[name].get("access"),
+            frozenset(observed[name].get("destinationAddressPrefixes") or ()),
+            observed[name].get("destinationPortRange"),
+            observed[name].get("protocol"),
+        ) == expected
+        and observed[name].get("direction") == "Outbound"
+        and observed[name].get("sourceAddressPrefix") == "*"
+        and observed[name].get("sourcePortRange") == "*"
+        for name, expected in OPTIONAL_RULES.items()
+        if name in observed
     )
     lock = str(stack.get("provisioningState", "")).lower() == "succeeded" and rules_match
     running = vm.get("powerState") == "VM running"

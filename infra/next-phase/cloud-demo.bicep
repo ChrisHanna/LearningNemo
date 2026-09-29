@@ -11,6 +11,8 @@ param registryServer string
 @secure()
 param consoleImage string
 @secure()
+param controllerImage string
+@secure()
 param agentImage string
 @secure()
 param tenantId string
@@ -25,6 +27,11 @@ param incidentOrigin string = ''
 param executionOrigin string = ''
 param invoiceOperatorOrigin string = ''
 param invoiceReviewOrigin string = ''
+param publicDemoOrigin string = 'https://learningnemo.ai'
+param serviceOpsOperatorOrigin string = ''
+param serviceOpsReviewOrigin string = ''
+param invoiceAgentsPreviewEnabled string = 'false'
+param publicDemoCertificateId string = ''
 
 var tags = union({
   project: 'learningnemo'
@@ -84,6 +91,7 @@ module apps './modules/cloud-demo-apps.bicep' = {
     environmentDomain: environmentDomain
     registryServer: registryServer
     consoleImage: consoleImage
+    controllerImage: controllerImage
     agentImage: agentImage
     identityIds: identities.outputs.identityIds
     clientIds: identities.outputs.clientIds
@@ -97,8 +105,15 @@ module apps './modules/cloud-demo-apps.bicep' = {
     executionOrigin: executionOrigin
     invoiceOperatorOrigin: invoiceOperatorOrigin
     invoiceReviewOrigin: invoiceReviewOrigin
+    publicDemoOrigin: publicDemoOrigin
+    serviceOpsOperatorOrigin: serviceOpsOperatorOrigin
+    serviceOpsReviewOrigin: serviceOpsReviewOrigin
+    invoiceAgentsPreviewEnabled: invoiceAgentsPreviewEnabled
+    publicDemoCertificateId: publicDemoCertificateId
   }
   dependsOn: [registryAccess, secretAccess, workspaceAccess, diagnosticAccess]
 }
 
 output dashboardUrl string = apps.outputs.dashboardUrl
+output publicDemoName string = apps.outputs.publicDemoName
+output publicDemoFqdn string = apps.outputs.publicDemoFqdn

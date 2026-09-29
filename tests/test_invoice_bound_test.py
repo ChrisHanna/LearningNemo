@@ -100,14 +100,16 @@ async def test_controller_revokes_tests_same_sandbox_stops_then_persists(request
         if name == 'control.usp_claim_invoice_sandbox_test': return ({'test_requested':requested},)
         assert name == 'control.usp_record_invoice_sandbox_test'
         proof = json.loads(values['receipt_json'])
-        assert proof['sandbox_stopped'] is True and proof['sandbox_id']=='c'*32
+        assert proof['sandbox_stopped'] is True and proof['sandbox_retained'] is True and proof['sandbox_id']=='c'*32
         return ({'job_id':'b'*32},)
     def stop(kind, run_id): order.append('stop')
     async def probe(runtime, kind, run_id, prepared):
         order.append('probe')
         assert kind=='planning' and run_id=='b'*32 and prepared['sandbox_id']=='c'*32
         if probe_fails: raise RuntimeError('missing proof')
-        return {'run_id':run_id,'sandbox_id':prepared['sandbox_id'],'outcome':'denied'}
+        return {'run_id':run_id,'sandbox_id':prepared['sandbox_id'],'outcome':'denied',
+            'executed_in_sandbox':True,'sandbox_runtime':'OpenShell MicroVM',
+            'sandbox_executor':'/opt/venv/bin/python','sandbox_retained':False}
     async def audit(**values): order.append(values['event']['event_type'])
     controller=InvoiceController(admission_client=SimpleNamespace(call=call),incident_repository=None,verifier_repository=None,
         runtime=SimpleNamespace(stop=stop),audit=audit,sandbox_probe=probe)

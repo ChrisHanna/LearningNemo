@@ -1,5 +1,6 @@
 """Closed private invoice API proxy; no browser-selected origins or SQL."""
 
+import asyncio
 import re
 
 import httpx
@@ -33,7 +34,7 @@ class InvoiceScenarioRequest(BaseModel):
 class InvoiceChallengeRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     challenge_id: str = Field(pattern=r'^[a-f0-9]{32}$')
-    kind: Literal['planning','execution']
+    kind: Literal['planning','execution','query-draft','allowed-file','denied-file','sql-denied','write-app-denied','approved-api','external-api-denied','symlink-escape-denied']
 
 
 class InvoiceSandboxTestRequest(BaseModel):
@@ -53,21 +54,39 @@ class InvoiceRemoteError(RuntimeError):
 
 
 class RemoteInvoiceService:
-    def __init__(self, operator_origin, review_origin):
+    investigation_mode = 'openshell'
+
+    def __init__(self, operator_origin, review_origin, *, broker_credential=None, broker_audience=None):
         domain = '.internal.jollybeach-503c7ed1.eastus.azurecontainerapps.io'
         if operator_origin != 'https://ca-nemo-invoice-operator-dev' + domain or review_origin != 'https://ca-nemo-invoice-review-dev' + domain:
             raise ValueError('fixed private invoice origins required')
         self.operator_origin, self.review_origin = operator_origin, review_origin
+        self.broker_credential, self.broker_audience = broker_credential, broker_audience
 
-    async def request(self, method, path, token, body=None, *, review=False, after=0):
+    async def request(self, method, path, token, body=None, *, review=False, after=0, guest_subject=None, guest_persona=None):
         allowed = (method == 'GET' and (path in ('/invoices/plans','/invoices/sandboxes','/invoices/demo-session') or re.fullmatch(r'/invoices/scenarios/[a-f0-9]{32}', path) or re.fullmatch(r'/invoices/jobs/[a-f0-9]{32}(/events)?', path) or re.fullmatch(r'/invoices/challenges/[a-f0-9]{32}|/invoices/plans/[a-f0-9]{32}/evidence', path))) or (
             method == 'POST' and (path in ('/invoices/jobs','/invoices/scenarios','/invoices/challenges','/invoices/demo-session/start','/invoices/demo-session/end') or re.fullmatch(r'/invoices/sandboxes/[a-f0-9]{32}/delete', path) or re.fullmatch(r'/invoices/jobs/[a-f0-9]{32}/sandbox-test', path) or re.fullmatch(r'/invoices/plans/[a-f0-9]{32}/(submit|complete|decision|reconcile)', path)))
         if not allowed or type(after) is not int or after < 0:
             raise ValueError('invoice proxy route denied')
+        headers = {'Authorization': 'Bearer ' + token}
+        if guest_subject is not None or guest_persona is not None:
+            if (
+                self.broker_credential is None
+                or not self.broker_audience
+                or not re.fullmatch(r'[a-f0-9]{64}', guest_subject or '')
+                or guest_persona not in ('operator', 'approver')
+            ):
+                raise InvoiceRemoteError(403, 'Public demo identity is unavailable')
+            broker = await asyncio.to_thread(self.broker_credential.get_token, self.broker_audience + '/.default')
+            headers = {
+                'Authorization': 'Bearer ' + broker.token,
+                'X-LearningNeMo-Guest-Subject': guest_subject,
+                'X-LearningNeMo-Guest-Persona': guest_persona,
+            }
         try:
             async with httpx.AsyncClient(timeout=150 if path.startswith('/invoices/sandboxes') or path == '/invoices/scenarios' or method == 'GET' and (path == '/invoices/plans' or path.startswith('/invoices/scenarios/')) else 75 if path.endswith(('/reconcile','/evidence')) else 30, follow_redirects=False) as client:
                 response = await client.request(method, (self.review_origin if review else self.operator_origin) + path,
-                    headers={'Authorization': 'Bearer ' + token}, json=body, params={'after': after} if path.endswith('/events') else None)
+                    headers=headers, json=body, params={'after': after} if path.endswith('/events') else None)
             if response.status_code not in (200, 201, 202):
                 if response.status_code == 503 and len(response.content) <= 4096:
                     try:

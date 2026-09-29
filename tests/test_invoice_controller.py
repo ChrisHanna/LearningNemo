@@ -49,7 +49,9 @@ async def test_execution_uses_new_sandbox_and_independent_verifier(requested):
         assert selected_runtime is runtime and kind == 'execution'
         assert runtime.prepared == [(kind, run_id)] and not runtime.stopped
         assert prepared['sandbox_id'] == runtime.sandbox_id
-        return {'run_id':run_id,'sandbox_id':prepared['sandbox_id'],'outcome':'denied'}
+        return {'run_id':run_id,'sandbox_id':prepared['sandbox_id'],'outcome':'denied',
+            'executed_in_sandbox':True,'sandbox_runtime':'OpenShell MicroVM',
+            'sandbox_executor':'/opt/venv/bin/python','sandbox_retained':False}
     controller = InvoiceController(admission_client=SimpleNamespace(call=call), incident_repository=SimpleNamespace(plans=plans),
         verifier_repository=SimpleNamespace(verify=verify), runtime=runtime, audit=audit, sandbox_probe=probe if requested is not None else None)
     result = await controller.execute(plan.plan_id, plan.plan_hash, sponsor_hash=plan.sponsor_hash)
@@ -62,7 +64,9 @@ async def test_execution_uses_new_sandbox_and_independent_verifier(requested):
         'verification-started', 'verification-passed', 'authority-revoked'] + (
         ['sandbox-test-started'] if requested else []) + ['sandbox-stopped'] + (['sandbox-test-recorded'] if requested else [])
     assert ('sandbox_test' in result) is bool(requested)
-    if requested: assert result['sandbox_test']['sandbox_stopped'] is True
+    if requested:
+        assert result['sandbox_test']['executed_in_sandbox'] is True
+        assert result['sandbox_test']['sandbox_stopped'] is True and result['sandbox_test']['sandbox_retained'] is True
 
 
 @pytest.mark.asyncio

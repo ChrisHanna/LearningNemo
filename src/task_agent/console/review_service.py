@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 import hashlib
 import os
+import re
 import time
 from uuid import UUID
 import uvicorn
@@ -14,7 +15,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
 from task_agent.console.cloud_auth import CloudJwtProvider
-from task_agent.console.identity import EntraTestSettings, validate_signed_in_user
+from task_agent.console.identity import EntraTestSettings, access_token_roles, validate_signed_in_user
 from task_agent.control.operations import OperationDeniedError
 from task_agent.control.review import ReviewDecision, SqlReviewRepository
 from task_agent.control.sql_backend import SqlProcedureUnavailableError
@@ -25,6 +26,7 @@ class ReviewIdentity(BaseModel):
     subject_hash: str
     persona: str
     scopes: frozenset[str] = frozenset()
+    authentication: str = "entra"
 
 
 class ReviewVerifier(Protocol):
@@ -51,6 +53,63 @@ class EntraReviewVerifier:
             raise ValueError("stable tenant and object identity required")
         subject = f"entra-tenant-oid-v1:{UUID(verified.tenant_id)}:{UUID(verified.object_id)}"
         return ReviewIdentity(subject_hash=hashlib.sha256(subject.encode()).hexdigest(), persona=profile.persona, scopes=frozenset(profile.scopes))
+
+
+class InvoiceIdentityVerifier:
+    """Accept human Entra users or one exact managed-identity guest broker."""
+
+    def __init__(
+        self,
+        settings: EntraTestSettings,
+        *,
+        guest_broker_client_id: str | None = None,
+        guest_broker_object_id: str | None = None,
+    ) -> None:
+        self.human = EntraReviewVerifier(settings)
+        self.provider = self.human.provider
+        self.settings = settings
+        self.guest_broker_client_id = guest_broker_client_id
+        self.guest_broker_object_id = guest_broker_object_id
+
+    async def verify(
+        self,
+        token: str,
+        *,
+        guest_subject: str | None = None,
+        guest_persona: str | None = None,
+    ) -> ReviewIdentity:
+        if guest_subject is None and guest_persona is None:
+            return await self.human.verify(token)
+        if (
+            not self.guest_broker_client_id
+            or not self.guest_broker_object_id
+            or guest_persona not in {"operator", "approver"}
+            or not re.fullmatch(r"[a-f0-9]{64}", guest_subject or "")
+        ):
+            raise ValueError("guest broker context denied")
+        verified = await self.provider.verify(token)
+        if (
+            not verified.active
+            or verified.client_id != self.guest_broker_client_id
+            or verified.object_id != self.guest_broker_object_id
+            or verified.tenant_id != self.settings.tenant_id
+            or "Invoice.GuestBroker" not in access_token_roles(token)
+            or not isinstance(verified.iat, (int, float))
+            or verified.iat > time.time() + 300
+        ):
+            raise ValueError("guest broker identity denied")
+        scopes = (
+            frozenset({"agent.invoke", "tasks.read", "tasks.execute"})
+            if guest_persona == "operator"
+            else frozenset({"agent.invoke", "plans.review"})
+        )
+        subject = f"learningnemo-public-guest-v1:{guest_subject}"
+        return ReviewIdentity(
+            subject_hash=hashlib.sha256(subject.encode()).hexdigest(),
+            persona=guest_persona,
+            scopes=scopes,
+            authentication="guest",
+        )
 
 
 def create_review_app(repository: SqlReviewRepository, verifier: ReviewVerifier, *, expires_at: datetime | None = None) -> FastAPI:

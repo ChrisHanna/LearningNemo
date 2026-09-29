@@ -35,7 +35,9 @@ def sign_in(client, headers, persona):
 
 def test_local_invoice_demo_completes_with_separate_accounts():
     client, headers = local_client()
-    assert client.get("/api/bootstrap").json()["session"]["authMode"] == "local-demo"
+    bootstrap = client.get("/api/bootstrap").json()
+    assert bootstrap["session"]["authMode"] == "local-demo"
+    assert bootstrap["invoiceInvestigationMode"] == "fixture"
     assert client.post("/api/auth/start", headers=headers, json={"persona": "reader"}).status_code == 422
 
     sign_in(client, headers, "operator")
@@ -111,3 +113,33 @@ def test_local_invoice_demo_session_can_end_through_console_api():
 
     assert ended.status_code == 200, ended.json()
     assert ended.json()["state"] == "idle"
+
+
+def test_local_invoice_demo_exposes_explicit_sandbox_investigation_fixtures():
+    client, headers = local_client()
+    sign_in(client, headers, "operator")
+
+    scenarios = ("query-draft", "allowed-file", "denied-file", "sql-denied", "write-app-denied", "approved-api", "external-api-denied", "symlink-escape-denied")
+    challenge_ids = {}
+    for index, scenario in enumerate(scenarios, 4):
+        challenge_id = format(index, "x") * 32
+        challenge_ids[scenario] = challenge_id
+        admitted = client.post(
+            "/api/invoices/challenges",
+            headers=headers,
+            json={"challenge_id": challenge_id, "kind": scenario},
+        )
+        assert admitted.status_code == 202, admitted.json()
+        receipt = client.get(f"/api/invoices/challenges/{challenge_id}").json()
+        assert receipt["kind"] == scenario
+        assert receipt["state"] == "finished"
+        assert receipt["result"]["evidence_mode"] == "fixture"
+        assert receipt["result"]["model_involved"] is False
+        assert receipt["result"]["sandbox_created"] is False
+        assert "sandbox_id" not in receipt["result"]
+        assert "uid" not in receipt["result"]
+
+    assert client.get("/api/invoices/challenges/" + challenge_ids["query-draft"]).json()["result"]["query_executed"] is False
+    assert client.get("/api/invoices/challenges/" + challenge_ids["approved-api"]).json()["result"]["http_status"] == 401
+    assert client.get("/api/invoices/challenges/" + challenge_ids["symlink-escape-denied"]).json()["result"]["link_removed"] is True
+    assert client.get("/api/invoices/challenges/" + "c" * 32).status_code == 404

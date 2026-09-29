@@ -17,6 +17,12 @@ from availability_policy import dependency_mode
 
 ROOT=Path(__file__).parents[2]
 STATE=Path.home()/'.local/state/learningnemo'
+INVOICE_MIGRATIONS = (
+    '008_invoice_lab.sql', '009_invoice_workflow.sql', '010_invoice_jobs.sql', '011_invoice_recovery.sql',
+    '012_invoice_retention.sql', '013_invoice_review_window.sql', '014_invoice_bound_sandbox_test.sql',
+    '015_invoice_retention_pressure.sql', '016_invoice_doubled_windows.sql', '017_invoice_agents_api.sql',
+    '018_invoice_demo_lifecycle.sql', '019_invoice_public_demo.sql',
+)
 GROUP='rg-learningnemo-invoice-dev'
 KINDS=('operator','review','planning','execution','verifier','simulator')
 PULL='7f951dda-4ed3-4680-a7ca-43fe172d538d'
@@ -66,13 +72,15 @@ def prepare():
     settings=json.loads((ROOT/'.nemo-test-client.json').read_text())
     server=az('sql','server','list','-g','rg-learningnemo-data-dev')[0]
     current=az('containerapp','show','-g','rg-learningnemo-demo-dev','-n','ca-learningnemo-agent-dev')
+    guest_broker=az('identity','show','-g','rg-learningnemo-demo-dev','-n','id-learningnemo-cloud-public-demo-dev')
     env={entry['name']:entry.get('value') for entry in current['properties']['template']['containers'][0]['env']}
     image=(STATE/'invoice-services.image.txt').read_text().strip(); agent_image=(STATE/'invoice-agent.image.txt').read_text().strip()
     for value,repository in ((image,'invoice-services'),(agent_image,'invoice-agent')):
         if not re.fullmatch(re.escape(registry['loginServer']+'/learningnemo/'+repository)+r'@sha256:[a-f0-9]{64}',value): raise ValueError('owned pinned image required')
     values=dict(location='eastus',environmentId=environment['id'],registryServer=registry['loginServer'],image=image,agentImage=agent_image,
         expiresAt=expiry.isoformat() if expiry else '',availabilityMode=availability_mode,credentialMode=credential_mode,tenantId=settings['ENTRA_TENANT_ID'],apiClientId=settings['ENTRA_CLIENT_ID'],publicClientId=settings['ENTRA_PUBLIC_CLIENT_ID'],
-        sqlServer=server['fullyQualifiedDomainName'],modelOrigin=env['OPENAI_BASE_URL'],guardrailOrigin=env['OPENAI_GUARDRAIL_BASE_URL'],subscriptionId=subscription,deployApps=False)
+        sqlServer=server['fullyQualifiedDomainName'],modelOrigin=env['OPENAI_BASE_URL'],guardrailOrigin=env['OPENAI_GUARDRAIL_BASE_URL'],subscriptionId=subscription,
+        guestBrokerClientId=guest_broker['clientId'],guestBrokerObjectId=guest_broker['principalId'],deployApps=False)
     if az('group','exists','-n',GROUP):
         if az('group','show','-n',GROUP).get('tags',{}).get('purpose')!='invoice-agent-workflow': raise ValueError('resource group collision')
     else:
@@ -131,7 +139,7 @@ def main():
         executions=az('containerapp','job','execution','list','-g','rg-learningnemo-human-dev','-n','caj-learningnemo-human-mig-dev')
         selected=next(row for row in executions if row['name']==execution)
         if selected['properties']['status']!='Succeeded':raise ValueError('invoice migration did not succeed')
-        expected={'human-'+name:hashlib.sha256((ROOT/'infra/next-phase/review-service'/name).read_text().encode()).hexdigest() for name in ('008_invoice_lab.sql','009_invoice_workflow.sql','010_invoice_jobs.sql','011_invoice_recovery.sql','012_invoice_retention.sql','013_invoice_review_window.sql','014_invoice_bound_sandbox_test.sql','015_invoice_retention_pressure.sql','016_invoice_doubled_windows.sql')}
+        expected={'human-'+name:hashlib.sha256((ROOT/'infra/next-phase/review-service'/name).read_text().encode()).hexdigest() for name in INVOICE_MIGRATIONS}
         if args.readback_status:
             migration_parameters=json.loads((STATE/'human-migration.parameters.json').read_text())['parameters']
             if migration_parameters['image']['value'] != (STATE/'cloud-human.image.txt').read_text().strip(): raise ValueError('current readback image required')
@@ -150,7 +158,7 @@ def main():
         return
     receipt=json.loads((STATE/'invoice-migration.verified.json').read_text())
     if receipt['principals']!=live['principals']: raise ValueError('verified invoice SQL identity bindings required')
-    expected={'human-'+name:hashlib.sha256((ROOT/'infra/next-phase/review-service'/name).read_text().encode()).hexdigest() for name in ('008_invoice_lab.sql','009_invoice_workflow.sql','010_invoice_jobs.sql','011_invoice_recovery.sql','012_invoice_retention.sql','013_invoice_review_window.sql','014_invoice_bound_sandbox_test.sql','015_invoice_retention_pressure.sql','016_invoice_doubled_windows.sql')}
+    expected={'human-'+name:hashlib.sha256((ROOT/'infra/next-phase/review-service'/name).read_text().encode()).hexdigest() for name in INVOICE_MIGRATIONS}
     if receipt['migrations'] != expected: raise ValueError('current invoice migration receipts required before activating services')
     if (STATE/'human-migration.cleanup.json').exists(): raise ValueError('migration authority cleanup required')
     deploy({**live['values'],'deployApps':True},live['subscription'])

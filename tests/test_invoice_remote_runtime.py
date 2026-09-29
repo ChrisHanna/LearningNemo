@@ -14,6 +14,7 @@ def test_remote_prepare_has_fixed_image_and_short_name():
     compile(script.split("python3 - <<'PY'\n",1)[1].rsplit('\nPY',1)[0],'<host-prepare>','exec')
     assert 'ip-'+('b'*16) in script and 'sandbox delete' not in script
     with pytest.raises(ValueError): prepare_script('planning','b'*32,'example.com/x',policy)
+    with pytest.raises(ValueError): prepare_script('planning','b'*32,image,policy,'typo')
     script=prepare_script('planning','b'*32,'crlearningnemodevgruyrc4qwdvvm.azurecr.io/learningnemo/invoice-agent@sha256:'+'a'*64,policy)
     assert script.index('invoice-provision-expire-') < script.index("cli('sandbox','create'")
     assert 'timeout=540' in script and '>1260' in script
@@ -33,7 +34,9 @@ def test_managed_host_keeps_per_run_watchdogs_and_checks_operator_gate():
     assert "'admission_enabled':True" in script and 'st_uid==0' in script
     assert 'is-enabled' in script and 'is-active' in script
     assert "'--on-active','1200s'" in script and "'--on-active','600s'" in script
-    assert 'len(inventory)>=24' in script and "item['phase']=='Stopped'" in script
+    assert 'len(inventory)>=24' in script and "item.get('phase')=='Stopped'" in script
+    assert "item.get('phase')!='Error'" in script and 'runtime.exists() or runtime.is_symlink()' in script
+    assert "glob('[0-9]*/cmdline')" in script and 'any(needle in content for needle in needles)' in script
     assert 'disk.f_bavail*disk.f_frsize>=4*1024**3' in script
 
 

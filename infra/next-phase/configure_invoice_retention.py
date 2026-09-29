@@ -39,7 +39,20 @@ def policy_script(enabled, change):
     return HOST_PREFIX + f'''
 import hashlib,stat
 inventory=json.loads(cli('sandbox','list','--output','json'))
-assert all(item['phase']=='Stopped' for item in inventory), 'active sandbox; retention configuration unchanged'
+def quiescent(item):
+    if item.get('phase')=='Stopped': return True
+    if item.get('phase')!='Error': return False
+    identifier=str(uuid.UUID(item['id']))
+    runtime=pathlib.Path('/home/sawadmin/.local/state/openshell/vm/sandboxes')/identifier
+    if runtime.exists() or runtime.is_symlink(): return False
+    needles=(identifier.encode(),item['name'].encode())
+    for command in pathlib.Path('/proc').glob('[0-9]*/cmdline'):
+        try:
+            with command.open('rb') as source: content=source.read(65536)
+        except (FileNotFoundError,PermissionError,OSError): continue
+        if any(needle in content for needle in needles): return False
+    return True
+assert all(quiescent(item) for item in inventory), 'active sandbox; retention configuration unchanged'
 directory=pathlib.Path('/etc/learningnemo')
 assert directory.is_dir() and not directory.is_symlink() and directory.stat().st_uid==0 and directory.stat().st_mode & 0o022==0
 path=directory/'invoice-retention.json'
@@ -47,8 +60,9 @@ expected={policy!r}
 if path.exists():
     assert not path.is_symlink() and path.stat().st_uid==0 and path.stat().st_mode & 0o022==0
     current=json.loads(path.read_text())
-    legacy={{'version':1,'enabled':current.get('enabled'),'successful_stopped_ttl_hours':24}}
-    assert type(current.get('enabled'))==bool and (current==legacy or current=={{**expected,'enabled':current['enabled']}})
+    legacy_v1={{'version':1,'enabled':current.get('enabled'),'successful_stopped_ttl_hours':24}}
+    legacy_v2={{'version':2,'enabled':current.get('enabled'),'successful_stopped_ttl_hours':24,'cleanup_at_count':14,'target_count':13}}
+    assert type(current.get('enabled'))==bool and (current in (legacy_v1,legacy_v2) or current=={{**expected,'enabled':current['enabled']}})
 if {change!r}:
     temporary=directory/'invoice-retention.new'
     with open(os.open(temporary,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600),'w') as output:
@@ -63,8 +77,16 @@ if archives.exists():
     assert not archives.is_symlink() and archives.stat().st_uid==0 and archives.stat().st_mode & 0o077==0
     for archive in archives.iterdir():
         assert archive.is_dir() and not archive.is_symlink() and archive.stat().st_uid==0 and archive.stat().st_mode & 0o077==0
+        if archive.name.startswith('manual-'):
+            continue
+        if archive.name=='delete-attempts':
+            for attempt in archive.iterdir():
+                assert attempt.is_file() and not attempt.is_symlink() and attempt.stat().st_mode & 0o077==0
+                saved=json.loads(attempt.read_text())
+                assert attempt.name==saved['sandbox_id']+'.json'
+            continue
         manifest=archive/'manifest.json'
-        assert manifest.is_file() and not manifest.is_symlink()
+        assert manifest.is_file() and not manifest.is_symlink(), f'incomplete retention archive: {{archive}}'
         saved=json.loads(manifest.read_text())
         for name,digest in saved['sha256'].items():
             target=archive/name
@@ -74,9 +96,12 @@ if archives.exists():
         if deleted.exists():
             receipt=json.loads(deleted.read_text())
             assert all(uuid.UUID(item['id']).hex!=receipt['sandbox_id'] for item in inventory)
-        receipts.append({{'run_id':saved['run_id'],'verified':True,'deletion_confirmed':deleted.exists()}})
+        receipts.append({{
+            'run_id':saved.get('run_id'),'sandbox_id':saved.get('sandbox_id'),
+            'verified':True,'deletion_confirmed':deleted.exists()
+        }})
 disk=os.statvfs('/var/lib/learningnemo-invoice-cache/runs')
-print('RETENTION_POLICY '+json.dumps({{'policy':expected,'retained':len(inventory),'all_stopped':True,'free_gib':round(disk.f_bavail*disk.f_frsize/1024**3,2),'archives':receipts}}))
+print('RETENTION_POLICY '+json.dumps({{'policy':expected,'retained':len(inventory),'all_quiescent':True,'free_gib':round(disk.f_bavail*disk.f_frsize/1024**3,2),'archives':receipts}}))
 PY
 '''
 
@@ -95,7 +120,7 @@ def main():
         if not args.apply or os.environ.get('LEARNINGNEMO_AZURE_APPLY') != 'invoice-retention':
             raise ValueError('explicit invoice-retention apply acknowledgment required')
     if args.action in ('preview', 'run'):
-        output = remote('operator', sweep_code(args.action == 'run'), 'RETENTION_RESULT')
+        output = remote('operator', sweep_code(args.action == 'run'), 'RETENTION_RESULT', read_only=args.action == 'preview')
         receipts = [json.JSONDecoder().raw_decode(line.split('RETENTION_RESULT ', 1)[1])[0] for line in output.splitlines() if 'RETENTION_RESULT ' in line]
         if len(receipts) != 1:
             raise ValueError('retention receipt unconfirmed; no replay')
@@ -114,7 +139,8 @@ def main():
                 '--scripts', policy_script(args.action != 'pause', args.action != 'verify'))
     receipts = [json.loads(line.split('RETENTION_POLICY ', 1)[1]) for item in result.get('value', []) for line in item.get('message', '').splitlines() if line.startswith('RETENTION_POLICY ')]
     if len(receipts) != 1:
-        raise ValueError('retention policy or archive verification unconfirmed')
+        messages = [item.get('message', '') for item in result.get('value', [])]
+        raise ValueError(f'retention policy or archive verification unconfirmed: {messages}')
     save('invoice-retention.policy.json', {**receipts[0], 'checked_at': datetime.now(UTC).isoformat()})
     print(json.dumps(receipts[0]))
 

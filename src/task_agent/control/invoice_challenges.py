@@ -1,13 +1,28 @@
 """Fixed probes share durable at-most-once SQL admission with agent jobs."""
 
 import json
+import logging
 
 from task_agent.control.invoice_jobs import InvoiceJobs
 from task_agent.control.operations import OperationDeniedError
 from task_agent.control.invoice_sandbox import SandboxCapacityError
 
 
-TARGETS = {'planning': '0'*31+'1', 'execution': '0'*31+'2'}
+logger = logging.getLogger(__name__)
+
+
+TARGETS = {
+    'planning': '0'*31+'1',
+    'execution': '0'*31+'2',
+    'query-draft': '0'*31+'3',
+    'allowed-file': '0'*31+'4',
+    'denied-file': '0'*31+'5',
+    'sql-denied': '0'*31+'6',
+    'write-app-denied': '0'*31+'7',
+    'approved-api': '0'*31+'8',
+    'external-api-denied': '0'*31+'9',
+    'symlink-escape-denied': '0'*31+'a',
+}
 
 
 class InvoiceChallenges:
@@ -28,8 +43,9 @@ class InvoiceChallenges:
         claimed = await self.controller.admission.call('control.usp_claim_invoice_job', {'job_id':identifier,'sponsor_hash':owner})
         if not claimed: return
         if len(claimed) != 1: raise OperationDeniedError('challenge claim unconfirmed')
-        async def emit(label):
-            await self.jobs.audit(sponsor_hash=owner,run_id=identifier,event={'source':'probe-controller','event_type':'probe-progress','reason':label,'kind':kind})
+        async def emit(reason, *, event_type='probe-progress', **details):
+            await self.jobs.audit(sponsor_hash=owner,run_id=identifier,event={
+                'source':'workspace-controller','event_type':event_type,'reason':reason,'kind':kind,**details})
         try:
             if self.controller.lock.locked() and not getattr(self.controller, 'maintenance_active', False): raise OperationDeniedError('agent run active')
             async with self.controller.lock:
@@ -40,6 +56,7 @@ class InvoiceChallenges:
         except SandboxCapacityError as error:
             state, result = 'uncertain', {'outcome':'unconfirmed', **error.receipt()}
         except Exception:
+            logger.exception('invoice_challenge_failed', extra={'challenge_id': identifier, 'kind': kind})
             state, result = 'uncertain', {'outcome':'unconfirmed','detail':'Inspect retained sandbox evidence. The challenge was not replayed.'}
         await self.controller.admission.call('control.usp_finish_invoice_job', {'job_id':identifier,'sponsor_hash':owner,'state':state,'result_json':json.dumps(result)})
         if self.on_finished is not None:

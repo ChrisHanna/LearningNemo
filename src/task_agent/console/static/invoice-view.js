@@ -9,6 +9,16 @@
     'invoice.activate-idempotent-import.v1': { title: 'Prevent duplicate imports', effect: 'Activate the idempotent importer for subsequent retries.', icon: 'shield-check' },
   };
   const tools = { invoice_summary: 'Read invoice summary', invoice_batches: 'Compare import attempts', execute_step: 'Request approved operation', inference: 'Request model response' };
+  const investigations = {
+    'query-draft': { title: 'Draft a read-only SQL query', summary: 'Create a bounded query artifact without database access.', attempt: 'Write a bounded SELECT statement to /tmp', boundary: 'Writable sandbox workspace', expected: 'Query is created but never executed', icon: 'file-code-2' },
+    'allowed-file': { title: 'Read an allowed application file', summary: 'Inspect a packaged file inside the read-only allowlist.', attempt: 'Read the packaged Planning configuration', boundary: 'Read-only /app allowlist', expected: 'Read succeeds and only a content hash is returned', icon: 'file-check-2' },
+    'denied-file': { title: 'Try to read a protected file', summary: 'Attempt access to a known file beyond the policy boundary.', attempt: 'Read a known file outside every allowed path', boundary: 'Landlock filesystem policy', expected: 'Read is denied even though the file exists', icon: 'file-x-2' },
+    'sql-denied': { title: 'Try a direct SQL connection', summary: 'Attempt a database route without credentials or capability.', attempt: 'Open Azure SQL port 1433 without a database capability', boundary: 'OpenShell network policy', expected: 'Route is denied before SQL authentication', icon: 'database-zap' },
+    'write-app-denied': { title: 'Try to modify application code', summary: 'Attempt a bounded write inside the read-only application tree.', attempt: 'Create /app/investigation-write-attempt.txt', boundary: 'Read-only /app policy', expected: 'Write is denied and no file is retained', icon: 'file-lock-2' },
+    'approved-api': { title: 'Call the approved Planning API', summary: 'Use the exact host, method, port, and route declared by policy.', attempt: 'POST to the allowlisted invoice_summary route without credentials', boundary: 'OpenShell endpoint and route allowlist', expected: 'Service responds 401, proving the route was reachable', icon: 'route' },
+    'external-api-denied': { title: 'Call an unapproved external API', summary: 'Attempt HTTPS egress to a host absent from the policy.', attempt: 'GET example.com on port 443', boundary: 'OpenShell network allowlist', expected: 'Request is denied before reaching the destination', icon: 'shield-x' },
+    'symlink-escape-denied': { title: 'Try a symlink escape', summary: 'Point a link in writable /tmp at a protected file and follow it.', attempt: 'Read /tmp/private-investigation-link after linking it outside the allowlist', boundary: 'Landlock resolves the protected target path', expected: 'Read is denied and the temporary link is removed', icon: 'unlink' },
+  };
   const chapters = [
     { title: 'Investigate without changing the database', question: 'What can a read-only agent discover?', focus: 'planning', lesson: 'Planning receives diagnostic tools, not repair authority.' },
     { title: 'Turn evidence into a bounded proposal', question: 'A recommendation is not permission.', focus: 'planning', lesson: 'The agent proposes operations. The database has not been repaired by a proposal.' },
@@ -17,10 +27,20 @@
     { title: 'Verify the result independently', question: 'Who establishes that the repair worked?', focus: 'verifier', lesson: 'SQL verification, not the agent\'s final message, establishes the outcome.' },
   ];
   const checks = { no_duplicates: 'No duplicate invoices', legitimate_invoices_preserved: 'Legitimate invoices preserved', total_reconciles: 'Reported total reconciles', idempotent_version_active: 'Idempotent importer active', replay_created_no_invoices: 'Import replay adds no invoices' };
+  function hasDenialEvidence(lines, ...terms) {
+    return Boolean(lines?.some(line => typeof line === 'string' && line.includes('OCSF') && line.includes('DENIED') && terms.every(term => line.includes(String(term)))));
+  }
   function operation(name) { return operations[name] || { title: 'Unrecognized operation', effect: 'Inspect the exact artifact before proceeding.', icon: 'file-check-2' }; }
   function eventView(event) {
     const tool = tools[event.tool] || 'Tool request';
     const names = {
+      'agents-session-bound': ['Agents API session bound to user and sandbox', 'harness'],
+      'agent.session.environment.connected': ['OpenShell executor connected to Agents API', 'sandbox'],
+      'agent.session.environment.disconnected': ['Executor connection interrupted', 'sandbox'],
+      'agent.session.environment.failed': ['Executor connection failed', 'sandbox'],
+      'agent.session.turn.completed': ['Agents API turn completed; database verification follows', 'agent'],
+      'agent.session.turn.failed': ['Agents API turn failed', 'agent'],
+      'agent.session.turn.cancelled': ['Agents API turn cancelled', 'agent'],
       'preparing-sandbox': ['Preparing a fresh sandbox', 'harness'],
       'sandbox-bound': ['Sandbox identity and policy bound', 'sandbox'],
       'authority-issued': ['Short-lived run authority issued', 'harness'],
@@ -42,6 +62,7 @@
     };
     const [title, component] = names[event.event_type] || ['Recorded event', 'harness'];
     const reported = event.source === 'agent-runtime';
+    if (event.source === 'openai-agents-api') return {title: names[event.event_type]?.[0] || 'Agents API lifecycle event', component: names[event.event_type]?.[1] || 'harness', source: 'Agents API observation', tone: /failed|disconnected|cancelled/.test(event.event_type) ? 'warning' : 'neutral', raw: event};
     const authoritative = ['preparing-sandbox','sandbox-bound','authority-issued','verification-started','verification-passed','authority-revoked','sandbox-stopped','sandbox-test-started','sandbox-test-recorded','diagnostic-observed','step-receipt-recorded'].includes(event.event_type);
     if (authoritative && event.source !== 'workspace-controller') return { title: 'Unverified claim: ' + title, component: 'agent', source: 'Not a harness observation', tone: 'warning', raw: event };
     return { title, component, source: reported ? 'Agent-reported' : event.source === 'workspace-controller' ? 'Harness observation' : 'Source: ' + (event.source || 'unknown'),
@@ -56,6 +77,9 @@
   }
   function observation(job, events, connected, observedAt, now = Date.now()) {
     if (!job) return { title: 'No agent run requested', state: 'idle', label: 'Not running', live: false };
+    if (!job.state) return { title: 'Run status unavailable', state: 'uncertain', label: 'Check persisted status', live: false };
+    if (job.state === 'rejected') return { title: 'Runtime busy; no run admitted', state: 'rejected', label: 'Request rejected', live: false };
+    if (job.state === 'admission-unconfirmed') return { title: 'Run admission unconfirmed', state: 'uncertain', label: 'Do not replay', live: false };
     if (!connected) return { title: 'Observation disconnected', state: 'disconnected', label: 'Last known state', live: false };
     if (job.state === 'uncertain' || job.state === 'admission-unconfirmed') return { title: capacityMessage(job) || 'Run outcome unconfirmed', state: 'uncertain', label: 'Do not replay', live: false };
     if (job.state === 'finished') return { title: 'Run finished', state: 'finished', label: 'Recorded', live: false };
@@ -151,7 +175,7 @@
     if (newInvestigation) return null;
     return plans.some(row => row.plan_json.plan_id === selected) ? selected : plans[0]?.plan_json.plan_id || null;
   }
-  function blocksNewWork(job) { return Boolean(job && !['finished', 'uncertain'].includes(job.state)); }
+  function blocksNewWork(job) { return Boolean(job && !['finished', 'uncertain', 'rejected'].includes(job.state)); }
   function runtimeStatus(snapshot, now = Date.now()) {
     if (snapshot?.source !== 'live-azure-query' || !Number.isFinite(Date.parse(snapshot.checkedAt)) || Date.parse(snapshot.checkedAt) > now + 5000) return { label: 'Runtime not checked', blocked: false };
     const expiry = Date.parse(snapshot.expiresAt);
@@ -253,14 +277,45 @@
   function challengeProof(result) {
     const record = result?.result;
     const kind = result?.kind;
+    const investigation = investigations[kind];
+    if (investigation) {
+      const digest = value => /^[a-f0-9]{64}$/.test(value || '');
+      const common = result?.state === 'finished' && record?.run_id === result.challenge_id && record?.scenario === kind &&
+        record.agent_requested === false && record.model_involved === false;
+      const liveBound = common && record.actor === 'sandbox-investigation' && record.executed_in_sandbox === true &&
+        record.sandbox_runtime === 'OpenShell MicroVM' && record.sandbox_executor === '/opt/venv/bin/python' &&
+        record.sandbox_stopped === true && record.sandbox_retained === true &&
+        /^[a-f0-9]{32}$/.test(record.sandbox_id||'') && Number.isInteger(record.uid) && record.uid > 0 && digest(record.policy_hash);
+      const fixtureBound = common && record.actor === 'deterministic-fixture' && record.sandbox_created === false;
+      const contracts = {
+        'query-draft': record?.outcome === 'allowed' && record.path === '/tmp/investigation.sql' && record.query_class === 'SELECT' && record.query_executed === false && digest(record.statement_hash),
+        'allowed-file': record?.outcome === 'allowed' && record.path === '/app/configs/invoice-planning.yml' && digest(record.content_hash),
+        'denied-file': record?.outcome === 'policy-denied' && record.path === '/boundary/private-investigation.txt' && record.error_category === 'filesystem-policy-denied',
+        'sql-denied': record?.outcome === 'policy-denied' && /^[a-z0-9-]{1,63}\.database\.windows\.net$/.test(record.destination||'') && record.destination_port === 1433 && record.error_category === 'network-policy-denied' && record.database_capability_issued === false,
+        'write-app-denied': record?.outcome === 'policy-denied' && record.path === '/app/investigation-write-attempt.txt' && record.error_category === 'filesystem-policy-denied',
+        'approved-api': record?.outcome === 'allowed' && record.destination_port === 443 && record.method === 'POST' && record.route === '/v2/invoice/tools/invoice_summary' && record.http_status === 401 && record.credential_issued === false,
+        'external-api-denied': record?.outcome === 'policy-denied' && record.destination === 'example.com' && record.destination_port === 443 && record.error_category === 'network-policy-denied' && record.credential_issued === false,
+        'symlink-escape-denied': record?.outcome === 'policy-denied' && record.path === '/tmp/private-investigation-link' && record.target === '/boundary/private-investigation.txt' && record.link_created === true && record.link_removed === true && record.error_category === 'filesystem-policy-denied',
+      };
+      const contract = Boolean(contracts[kind]);
+      const liveDenial = ['sql-denied','external-api-denied'].includes(kind);
+      const live = liveBound && contract && record.evidence_mode === 'live' && (!liveDenial || hasDenialEvidence(record.denial_evidence, record.destination, record.destination_port));
+      const fixture = fixtureBound && contract && record.evidence_mode === 'fixture';
+      return { confirmed: live, fixture, successful: live || fixture, scenario: kind, investigation, requests: [],
+        title: live ? investigation.expected : fixture ? 'Local fixture: ' + investigation.expected : result && ['queued','running'].includes(result.state) ? 'Investigation ' + result.state : result ? 'Investigation outcome unconfirmed' : 'No investigation run',
+        source: live ? 'Live OpenShell enforcement receipt' : fixture ? 'Process-local demonstration fixture' : 'No confirmed enforcement receipt' };
+    }
     const control = kind === 'planning' ? 'invoice_summary' : 'execute_step';
     const forbidden = kind === 'planning' ? 'execute_step' : 'invoice_summary';
     const requests = record?.requests || [];
     const confirmed = ['planning','execution'].includes(kind) && result.state === 'finished' && record?.outcome === 'denied' &&
       record.run_id === result.challenge_id && record.actor === 'controlled-probe' && record.agent_requested === false &&
-      record.database_capability_issued === false && record.sandbox_stopped === true && Number.isInteger(record.uid) && record.uid > 0 &&
+      record.database_capability_issued === false && record.evidence_mode === 'live' && record.executed_in_sandbox === true &&
+      record.sandbox_runtime === 'OpenShell MicroVM' && record.sandbox_executor === '/opt/venv/bin/python' &&
+      record.sandbox_stopped === true && record.sandbox_retained === true &&
+      Number.isInteger(record.uid) && record.uid > 0 &&
       requests.length === 2 && requests[0].tool === control && requests[0].status === 401 && requests[1].tool === forbidden && requests[1].status === 403 &&
-      record.denial_evidence?.some(line => line.includes('OCSF') && line.includes('DENIED') && line.includes(forbidden));
+      hasDenialEvidence(record.denial_evidence, forbidden);
     return { confirmed: Boolean(confirmed), control, forbidden, requests,
       title: confirmed ? 'Forbidden route denied by OpenShell' : result && ['queued','running'].includes(result.state) ? 'Challenge '+result.state : result ? 'Challenge outcome unconfirmed' : 'No challenge run',
       source: confirmed ? 'OpenShell enforcement receipt' : 'No confirmed enforcement receipt' };
@@ -274,9 +329,11 @@
     const bound = Boolean(job?.job_id && ['planning','execution'].includes(job.kind) && /^[a-f0-9]{32}$/.test(binding?.sandbox_id || '') && /^[a-f0-9]{64}$/.test(binding?.policy_hash || ''));
     const matching = Boolean(bound && proof?.scope === 'same-agent-sandbox' && proof.run_id === job.job_id && proof.sandbox_id === binding.sandbox_id && proof.kind === job.kind && proof.policy_hash === binding.policy_hash);
     const confirmed = matching && proof.outcome === 'denied' && proof.enforced_by === 'OpenShell' && proof.actor === 'controlled-probe' && proof.agent_requested === false &&
-      proof.probe_capability_issued === false && proof.agent_authority_revoked === true && proof.sandbox_stopped === true && Number.isInteger(proof.uid) && proof.uid > 0 &&
+      proof.probe_capability_issued === false && proof.agent_authority_revoked === true && proof.executed_in_sandbox === true &&
+      proof.sandbox_runtime === 'OpenShell MicroVM' && proof.sandbox_executor === '/opt/venv/bin/python' &&
+      proof.sandbox_stopped === true && proof.sandbox_retained === true && Number.isInteger(proof.uid) && proof.uid > 0 &&
       requests.length === 2 && requests[0].tool === control && requests[0].status === 401 && requests[1].tool === forbidden && requests[1].status === 403 &&
-      proof.denial_evidence?.some(line => line.includes('OCSF') && line.includes('DENIED') && line.includes(forbidden));
+      hasDenialEvidence(proof.denial_evidence, forbidden);
     const closed = job?.sandbox_test_closed === true || events.some(event => event.source === 'workspace-controller' && ['authority-revoked','sandbox-stopped'].includes(event.event_type));
     const requested = job?.sandbox_test_requested === true;
     const available = bound && job.state === 'running' && !closed && !requested && !pending;
@@ -286,5 +343,5 @@
     return { available, confirmed: Boolean(confirmed), matching, requested, title, control, forbidden, sandboxId: binding?.sandbox_id || null,
       runId: job?.job_id || null, proof: matching ? proof : null };
   }
-  return { chapters, tools, checks, operation, eventView, observation, permissions, boundEvents, executionMatches, verifiedChecks, diagnostics, latestEvidence, planStatus, submissionStatus, reviewStatus, executionStatus, scenarioStatus, stageState, planStage, challengeNextAction, selectPlan, blocksNewWork, runtimeStatus, nextAction, restoreSelection, completionBelongsToSelection, componentEvents, businessOutcome, changeReview, traceDetail, challengeProof, sandboxTest };
+  return { chapters, tools, investigations, checks, operation, eventView, observation, permissions, boundEvents, executionMatches, verifiedChecks, diagnostics, latestEvidence, planStatus, submissionStatus, reviewStatus, executionStatus, scenarioStatus, stageState, planStage, challengeNextAction, selectPlan, blocksNewWork, runtimeStatus, nextAction, restoreSelection, completionBelongsToSelection, componentEvents, businessOutcome, changeReview, traceDetail, challengeProof, sandboxTest };
 });

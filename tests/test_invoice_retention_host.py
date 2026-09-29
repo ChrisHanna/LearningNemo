@@ -8,7 +8,7 @@ from datetime import timedelta
 
 import pytest
 
-from task_agent.console.invoice_retention_host import RETENTION_POLICY, retention_sweep
+from task_agent.console.invoice_retention_host import RETENTION_POLICY, retention_sweep, sandbox_quiescent
 from task_agent.control.invoice_retention import retention_candidate
 from test_invoice_retention import candidate_record
 
@@ -83,10 +83,11 @@ def test_pressure_deletes_recent_stopped_run_but_never_below_target(tmp_path):
 
 def test_manual_delete_requires_exact_eligible_id_and_does_not_touch_neighbors(tmp_path):
     candidate, inventory, calls, cli, options = host(tmp_path)
+    inventory.extend({'id':str(UUID(int=number)), 'name':'protected-'+str(number),'phase':'Stopped'} for number in range(1,11))
     result = retention_sweep([candidate], cli, apply=True, manual_id='f'*32, **options)
-    assert not result['deleted'] and len(inventory)==2
+    assert not result['deleted'] and len(inventory)==12
     result = retention_sweep([candidate], cli, apply=True, manual_id=candidate['sandbox_id'], **options)
-    assert result['deleted']==[candidate['run_id']] and len(inventory)==1
+    assert result['deleted']==[candidate['run_id']] and len(inventory)==11
 
 
 def test_pressure_policy_never_deletes_while_any_sandbox_is_active(tmp_path):
@@ -98,6 +99,28 @@ def test_pressure_policy_never_deletes_while_any_sandbox_is_active(tmp_path):
     assert not any(call[:2]==('sandbox','delete') for call in calls)
 
 
+def test_only_error_without_runtime_or_process_is_quiescent(tmp_path):
+    identifier=str(UUID('f'*32));record={'id':identifier,'name':'retained-error','phase':'Error'}
+    sandboxes=tmp_path/'sandboxes';sandboxes.mkdir()
+    processes=tmp_path/'proc';processes.mkdir()
+    assert sandbox_quiescent(record,sandboxes,processes) is True
+    runtime=sandboxes/identifier;runtime.mkdir()
+    assert sandbox_quiescent(record,sandboxes,processes) is False
+    runtime.rmdir();process=(processes/'123');process.mkdir();(process/'cmdline').write_bytes(b'worker retained-error')
+    assert sandbox_quiescent(record,sandboxes,processes) is False
+    assert sandbox_quiescent({**record,'phase':'Ready'},sandboxes,processes) is False
+    assert sandbox_quiescent({**record,'phase':'Stopped'},sandboxes,processes) is True
+
+
+def test_quiescent_error_is_retained_without_blocking_stopped_inventory(tmp_path):
+    candidate,inventory,calls,cli,options=host(tmp_path)
+    inventory[1]['phase']='Error'
+    result=retention_sweep([candidate],cli,**options)
+    assert result['status']=='preview' and result['eligible']==[candidate['run_id']]
+    error=next(item for item in result['sandboxes'] if item['phase']=='Error')
+    assert error['deletable'] is False and error['reason']=='Quiescent error retained; not eligible for deletion'
+
+
 def test_below_pressure_threshold_a_fresh_host_stop_still_blocks_ttl_cleanup(tmp_path):
     candidate, inventory, calls, cli, options = host(tmp_path)
     stopped=options['sandboxes']/str(UUID(candidate['sandbox_id']))/'stopped'
@@ -106,7 +129,7 @@ def test_below_pressure_threshold_a_fresh_host_stop_still_blocks_ttl_cleanup(tmp
     assert result['deleted']==[] and result['before_count']==2
 
 
-@pytest.mark.parametrize('initial_count,deleted_count', [(14,1),(16,2)])
+@pytest.mark.parametrize('initial_count,deleted_count', [(11,1),(12,2)])
 def test_pressure_cleanup_selects_oldest_first_and_honors_batch_limit(tmp_path, initial_count, deleted_count):
     candidate, inventory, calls, cli, options = host(tmp_path)
     candidates=[]
@@ -132,6 +155,42 @@ def test_pressure_cleanup_selects_oldest_first_and_honors_batch_limit(tmp_path, 
     result=retention_sweep(candidates,delete_cli,apply=True,pressure=True,**options)
     assert result['deleted']==[item['run_id'] for item in reversed(candidates)][:deleted_count]
     assert len(inventory)==initial_count-deleted_count
+
+
+def test_old_stopped_invoice_sandbox_without_sql_candidate_is_archived_and_deleted_under_pressure(tmp_path):
+    candidate, inventory, calls, cli, options = host(tmp_path)
+    inventory.extend({'id':str(UUID(int=number)), 'name':'protected-'+str(number),'phase':'Stopped'} for number in range(1,10))
+    def delete_cli(*args):
+        if args[:2] == ('sandbox', 'delete'):
+            record = next(item for item in inventory if item['name'] == args[2])
+            inventory.remove(record)
+            return ''
+        return cli(*args)
+    result = retention_sweep([], delete_cli, apply=True, pressure=True, **options)
+    assert result['deleted'] == ['stopped:' + candidate['sandbox_id']]
+    assert len(inventory) == 10
+    archive = options['archives'] / ('stopped-' + candidate['sandbox_id'])
+    assert (archive / 'manifest.json').is_file()
+    assert (archive / 'retention-class.json').is_file()
+    assert (archive / 'delete-attempt.json').is_file()
+    assert (archive / 'deleted.json').is_file()
+    assert json.loads((archive / 'retention-class.json').read_text())['class'] == 'stopped-host-evidence'
+
+
+def test_stopped_sandbox_delete_is_not_replayed_after_uncertain_outcome(tmp_path):
+    candidate, inventory, calls, cli, options = host(tmp_path)
+    inventory.extend({'id':str(UUID(int=number)), 'name':'protected-'+str(number),'phase':'Stopped'} for number in range(1,10))
+    attempts = []
+    def disconnected(*args):
+        if args[:2] == ('sandbox', 'delete'):
+            attempts.append(args)
+            raise RuntimeError('connection lost')
+        return cli(*args)
+    with pytest.raises(RuntimeError, match='connection lost'):
+        retention_sweep([], disconnected, apply=True, pressure=True, **options)
+    result = retention_sweep([], disconnected, apply=True, pressure=True, **options)
+    assert len(attempts) == 1 and result['deleted'] == []
+    assert any('no replay' in item['reason'] for item in result['retained'])
 
 
 def test_archive_precedes_exact_delete_and_every_other_sandbox_is_preserved(tmp_path):
@@ -168,6 +227,7 @@ def test_unsafe_or_unconfirmed_candidate_never_deletes(tmp_path, fault):
 
 def test_uncertain_delete_is_not_repeated(tmp_path):
     candidate, inventory, calls, cli, options = host(tmp_path)
+    inventory.extend({'id':str(UUID(int=number)), 'name':'protected-'+str(number),'phase':'Stopped'} for number in range(1,10))
     attempts = []
     def disconnected(*args):
         if args[:2] == ('sandbox', 'delete'):
@@ -175,9 +235,9 @@ def test_uncertain_delete_is_not_repeated(tmp_path):
             raise RuntimeError('connection lost')
         return cli(*args)
     with pytest.raises(RuntimeError): retention_sweep([candidate], disconnected, apply=True, **options)
-    result = retention_sweep([candidate], disconnected, apply=True, **options)
+    result = retention_sweep([], disconnected, apply=True, pressure=True, **options)
     assert len(attempts) == 1 and result['deleted'] == []
-    assert 'no replay' in result['retained'][0]['reason']
+    assert any('no replay' in item['reason'] for item in result['retained'])
 
 
 def test_archive_failure_blocks_deletion(tmp_path):

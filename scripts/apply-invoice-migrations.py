@@ -13,6 +13,14 @@ from task_agent.control.invoice_catalog import GRANTS
 from task_agent.control.mssql_client import build_connection_string,managed_identity_connect
 
 
+INVOICE_MIGRATIONS = (
+    '008_invoice_lab.sql', '009_invoice_workflow.sql', '010_invoice_jobs.sql', '011_invoice_recovery.sql',
+    '012_invoice_retention.sql', '013_invoice_review_window.sql', '014_invoice_bound_sandbox_test.sql',
+    '015_invoice_retention_pressure.sql', '016_invoice_doubled_windows.sql', '017_invoice_agents_api.sql',
+    '018_invoice_demo_lifecycle.sql', '019_invoice_public_demo.sql',
+)
+
+
 def invoice_grants():
     return {'operator':set(GRANTS['controller']+GRANTS['incident']+GRANTS['jobs']), 'review':set(GRANTS['review']),
             'planning':set(GRANTS['diagnostic']+GRANTS['inference']), 'execution':set(GRANTS['broker']+GRANTS['inference']), 'verifier':set(GRANTS['verifier']), 'simulator':set(GRANTS['simulator'])}
@@ -24,8 +32,7 @@ def verify_only():
     principals = json.loads(os.environ['LEARNINGNEMO_INVOICE_PRINCIPALS'])
     grants = invoice_grants()
     if set(principals) != set(grants) or len({value['clientId'] for value in principals.values()}) != 6: raise ValueError('six distinct invoice identities required')
-    names = ('008_invoice_lab.sql','009_invoice_workflow.sql','010_invoice_jobs.sql','011_invoice_recovery.sql','012_invoice_retention.sql','013_invoice_review_window.sql','014_invoice_bound_sandbox_test.sql','015_invoice_retention_pressure.sql','016_invoice_doubled_windows.sql')
-    expected = {'human-' + name: hashlib.sha256((Path('/app/migrations') / name).read_text().encode()).hexdigest() for name in names}
+    expected = {'human-' + name: hashlib.sha256((Path('/app/migrations') / name).read_text().encode()).hexdigest() for name in INVOICE_MIGRATIONS}
     server, client_id = os.environ['LEARNINGNEMO_SQL_SERVER'], os.environ['AZURE_CLIENT_ID']
     connection_string = build_connection_string(server=server, database=os.environ['LEARNINGNEMO_SQL_DATABASE'], client_id=client_id, application_name='InvoiceMigrationReadback')
     for _ in range(2):
@@ -85,7 +92,7 @@ def main():
                     review_before = dict(cursor.fetchall())
                     cursor.execute('SELECT PlanId,ApprovalExpiresAt FROM control.InvoicePlans WHERE ApprovalExpiresAt IS NOT NULL')
                     approval_before = dict(cursor.fetchall())
-                for name in ('008_invoice_lab.sql','009_invoice_workflow.sql','010_invoice_jobs.sql','011_invoice_recovery.sql','012_invoice_retention.sql','013_invoice_review_window.sql','014_invoice_bound_sandbox_test.sql','015_invoice_retention_pressure.sql','016_invoice_doubled_windows.sql'):
+                for name in INVOICE_MIGRATIONS:
                     source=(Path('/app/migrations')/name).read_text();digest=hashlib.sha256(source.encode()).hexdigest();key='human-'+name
                     migration_hashes[key]=digest
                     if key in before:

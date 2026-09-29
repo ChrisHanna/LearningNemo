@@ -108,8 +108,28 @@ class InvoiceRepository:
         rows = await self.read_client.call('control.usp_read_invoice_plans', {'sponsor_hash': sponsor_hash})
         return self._plans(rows)
 
-    async def reviews(self):
-        return self._plans(await self.read_client.call('control.usp_review_invoice_plans', {}))
+    async def reviews(self, *, guest_only=False):
+        procedure = 'control.usp_review_guest_invoice_plans' if guest_only else 'control.usp_review_invoice_plans'
+        return self._plans(await self.read_client.call(procedure, {}))
+
+    async def admit_guest_launch(self, job_id, guest_hash):
+        rows = await self.client.call(
+            'control.usp_admit_invoice_guest_launch',
+            {'job_id': job_id, 'guest_hash': guest_hash},
+        )
+        expected = {'admitted', 'reason', 'visitor_launches_last_hour', 'global_launches_today', 'visitor_limit', 'global_limit'}
+        if len(rows) != 1 or set(rows[0]) != expected:
+            raise SqlProcedureUnavailableError('public demo quota admission unconfirmed')
+        result = dict(rows[0])
+        if not result.pop('admitted'):
+            reason = result.pop('reason')
+            if reason == 'hourly':
+                raise OperationDeniedError('Public demo limit reached: this guest can launch 3 Planning sandboxes per hour')
+            if reason == 'daily':
+                raise OperationDeniedError('Public demo daily limit reached: 25 Planning sandboxes have already launched today')
+            raise SqlProcedureUnavailableError('public demo quota denial differs')
+        result.pop('reason')
+        return result
 
     async def scenario(self, scenario_id, sponsor_hash):
         rows = await self.read_client.call('control.usp_read_invoice_scenario', {'scenario_id': scenario_id, 'sponsor_hash': sponsor_hash})
@@ -151,10 +171,11 @@ class InvoiceRepository:
         if len(rows) != 1 or rows[0] != {'plan_id': plan_id}: raise SqlProcedureUnavailableError('submission receipt unconfirmed')
         return rows
 
-    async def decide(self, plan_id, plan_hash, reviewer_hash, decision):
+    async def decide(self, plan_id, plan_hash, reviewer_hash, decision, *, guest_only=False):
         if decision not in ('approve', 'reject'):
             raise OperationDeniedError('unrecognized review decision')
-        rows = await self.client.call('control.usp_decide_invoice_plan', {
+        procedure = 'control.usp_decide_guest_invoice_plan' if guest_only else 'control.usp_decide_invoice_plan'
+        rows = await self.client.call(procedure, {
             'plan_id': plan_id, 'plan_hash': plan_hash, 'reviewer_hash': reviewer_hash, 'decision': decision})
         if len(rows) != 1 or rows[0] != {'plan_id': plan_id}: raise SqlProcedureUnavailableError('decision receipt unconfirmed')
         return rows

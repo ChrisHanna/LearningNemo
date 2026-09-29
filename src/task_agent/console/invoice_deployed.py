@@ -2,6 +2,7 @@
 
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from functools import partial
 import json
 import os
 from pathlib import Path
@@ -20,7 +21,7 @@ from task_agent.console.invoice_remote_runtime import AzureInvoiceRuntime
 from task_agent.console.invoice_observations import add_observation_route, RemoteInvoiceObserver
 from task_agent.console.invoice_probes import run_probe, run_prepared_probe
 from task_agent.console.invoice_availability import configured_expiry
-from task_agent.console.review_service import EntraReviewVerifier
+from task_agent.console.review_service import InvoiceIdentityVerifier
 from task_agent.control.invoice_controller import InvoiceController
 from task_agent.control.invoice_jobs import InvoiceJobs
 from task_agent.control.invoice_challenges import InvoiceChallenges
@@ -62,6 +63,11 @@ def main():
         connection_timeout_seconds=30,connection_attempts=3) if kind in ('operator','review') else sql
     repository=InvoiceRepository(sql,read_client=read_sql)
     http=httpx.AsyncClient(follow_redirects=False,timeout=60)
+    identity_verifier = InvoiceIdentityVerifier(
+        EntraTestSettings.from_sources(),
+        guest_broker_client_id=os.environ.get('INVOICE_GUEST_BROKER_CLIENT_ID'),
+        guest_broker_object_id=os.environ.get('INVOICE_GUEST_BROKER_OBJECT_ID'),
+    )
     if kind in ('planning','execution'):
         def setup_model():
             token=credential.get_token('https://vault.azure.net/.default')
@@ -92,11 +98,11 @@ def main():
             controller.maintenance = sandboxes.before_run
             jobs.on_finished = sandboxes.notify
         jobs.controller=controller
-        challenges=InvoiceChallenges(controller,run_probe,on_finished=sandboxes.notify if sandboxes else None)
+        challenges=InvoiceChallenges(controller,partial(run_probe,sql_host=os.environ['LEARNINGNEMO_SQL_SERVER']),on_finished=sandboxes.notify if sandboxes else None)
         simulator=MssqlProcedureClient(server=os.environ['LEARNINGNEMO_SQL_SERVER'],database=os.environ['LEARNINGNEMO_SQL_DATABASE'],
             client_id=os.environ['INVOICE_SIMULATOR_CLIENT_ID'],application_name='InvoiceFixture',
             connection_timeout_seconds=30,connection_attempts=3)
-        app=create_invoice_service(mode='operator',repository=repository,identity_verifier=EntraReviewVerifier(EntraTestSettings.from_sources()),
+        app=create_invoice_service(mode='operator',repository=repository,identity_verifier=identity_verifier,
             expires_at=expiry,jobs=jobs,simulator=simulator,reconciler=controller,challenges=challenges,observer=observer,sandboxes=sandboxes,demo_session=sandboxes.demo if sandboxes else None,availability_mode=availability_mode)
         if availability_mode == 'operator-managed':
             from task_agent.console.invoice_retention_worker import retention_lifespan
@@ -105,7 +111,7 @@ def main():
         from task_agent.console.invoice_demo_session import acquire_remote_demo
         async def demo_check(token):
             return await acquire_remote_demo(http, token)
-        app=create_invoice_service(mode='review',repository=repository,identity_verifier=EntraReviewVerifier(EntraTestSettings.from_sources()),expires_at=expiry,demo_check=demo_check if availability_mode=='operator-managed' else None,availability_mode=availability_mode)
+        app=create_invoice_service(mode='review',repository=repository,identity_verifier=identity_verifier,expires_at=expiry,demo_check=demo_check if availability_mode=='operator-managed' else None,availability_mode=availability_mode)
     elif kind=='verifier':
         from task_agent.console.cloud_auth import CloudJwtProvider
         settings=EntraTestSettings.from_sources()

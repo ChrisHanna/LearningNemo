@@ -16,7 +16,7 @@
   const initialSteps = [
     ["Entra identity", "Not verified for this action", "unknown"],
     ["Operator permission", "Not evaluated", "unknown"],
-    ["SAW and runtime lock", "Not queried", "unknown"],
+    ["Secure Azure Environment and runtime lock", "Not queried", "unknown"],
     ["Planning MicroVM", "No command executed", "unknown"],
     ["Protected API route", "No request executed", "unknown"],
   ];
@@ -39,7 +39,7 @@
     const rows = [
       [state.hosting === "azure" ? "Azure dashboard" : "Local console", "Responding", "This browser session"],
       [state.hosting === "azure" ? "Cloud NeMo API" : "Local NeMo API", state.session?.persona === "approver" ? "Not permitted for Approver" : state.agent?.status === "not_authenticated" ? "Sign in to check" : state.agent?.status === "online" ? "Online" : "Unavailable / unchecked", "Separate agent health check"],
-      ["SAW VM", labels[snapshot?.vm] || "Not checked", source],
+      ["Secure Azure Environment host", labels[snapshot?.vm] || "Not checked", source],
       ["Runtime network lock", labels[snapshot?.runtimeLock] || "Not checked", source],
       ["Outbound translation", labels[snapshot?.nat] || "Not checked", source],
       ["OpenShell / Planning process", live.result?.receipt ? `Ran as UID ${live.result.receipt.uid}` : "Not checked inside the guest", live.result?.completedAt || "Requires workspace proof"],
@@ -109,7 +109,7 @@
     steps([
       ["Entra identity", `JWT verified / account ${result.identity.accountFingerprint}`, "passed"],
       ["Operator permission", denied ? "Denied before Azure execution. No workspace command sent." : "Required scopes and roles present", denied ? "denied" : "passed"],
-      ["SAW and runtime lock", result.cloud ? `VM: ${result.cloud.vm}; lock: ${result.cloud.runtimeLock}; lease: ${result.cloud.lease}` : "Not queried", result.cloud?.readyForProbe ? "passed" : "blocked"],
+      ["Secure Azure Environment and runtime lock", result.cloud ? `VM: ${result.cloud.vm}; lock: ${result.cloud.runtimeLock}; lease: ${result.cloud.lease}` : "Not queried", result.cloud?.readyForProbe ? "passed" : "blocked"],
       ["Planning MicroVM", receipt ? `Command returned UID ${receipt.uid}; setuid(0) ${receipt.privilegeEscalation}` : "No proof receipt returned", receipt ? "passed" : "blocked"],
       ["Protected API route", receipt ? `GET: ${receipt.readHttpStatus || "unreachable"}; POST: ${receipt.writeHttpStatus || "unreachable"}. Expected 401 / 403.` : "Not executed", receipt?.passed ? "passed" : receipt ? "failed" : "blocked"],
     ]);

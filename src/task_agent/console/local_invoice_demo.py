@@ -25,6 +25,47 @@ def _digest(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
 
+_FIXTURE_INVESTIGATIONS = {
+    "query-draft": {
+        "outcome": "allowed", "operation": "generate-read-query", "path": "/tmp/investigation.sql",
+        "query_class": "SELECT", "query_executed": False,
+        "statement_hash": _digest("SELECT order_id, amount_cents FROM invoice_lab.invoices"),
+    },
+    "allowed-file": {
+        "outcome": "allowed", "operation": "read-file", "path": "/app/configs/invoice-planning.yml",
+        "content_hash": _digest("fixture:invoice-planning.yml"),
+    },
+    "denied-file": {
+        "outcome": "policy-denied", "operation": "read-file", "path": "/boundary/private-investigation.txt",
+        "error_category": "filesystem-policy-denied",
+    },
+    "sql-denied": {
+        "outcome": "policy-denied", "operation": "connect-sql", "destination": "fixture.database.windows.net",
+        "destination_port": 1433, "error_category": "network-policy-denied", "database_capability_issued": False,
+    },
+    "write-app-denied": {
+        "outcome": "policy-denied", "operation": "write-file", "path": "/app/investigation-write-attempt.txt",
+        "error_category": "filesystem-policy-denied",
+    },
+    "approved-api": {
+        "outcome": "allowed", "operation": "call-planning-api",
+        "destination": "ca-nemo-invoice-planning-dev.jollybeach-503c7ed1.eastus.azurecontainerapps.io",
+        "destination_port": 443, "method": "POST", "route": "/v2/invoice/tools/invoice_summary",
+        "http_status": 401, "credential_issued": False,
+    },
+    "external-api-denied": {
+        "outcome": "policy-denied", "operation": "call-external-api", "destination": "example.com",
+        "destination_port": 443, "method": "GET", "route": "/", "error_category": "network-policy-denied",
+        "credential_issued": False,
+    },
+    "symlink-escape-denied": {
+        "outcome": "policy-denied", "operation": "follow-symlink", "path": "/tmp/private-investigation-link",
+        "target": "/boundary/private-investigation.txt", "link_created": True, "link_removed": True,
+        "error_category": "filesystem-policy-denied",
+    },
+}
+
+
 def _iso(minutes: int = 0) -> str:
     return (datetime.now(UTC) + timedelta(minutes=minutes)).isoformat()
 
@@ -32,12 +73,15 @@ def _iso(minutes: int = 0) -> str:
 class LocalInvoiceDemoService:
     """Implement the private invoice API contract without external side effects."""
 
+    investigation_mode = "fixture"
+
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._scenarios: dict[str, dict] = {}
         self._jobs: dict[str, dict] = {}
         self._events: dict[str, list[dict]] = {}
         self._plans: dict[str, dict] = {}
+        self._challenges: dict[str, dict] = {}
         self._session = {
             "source": "invoice-demo-session",
             "session_id": "d" * 32,
@@ -188,6 +232,32 @@ class LocalInvoiceDemoService:
         self._events[job_id] = self._events_for(job_id, "execution", sandbox_id, plan)
         return job
 
+    def _create_challenge(self, challenge_id: str, scenario: str) -> dict:
+        common = {
+            "run_id": challenge_id,
+            "scenario": scenario,
+            "evidence_mode": "fixture",
+            "enforced_by": "deterministic local fixture",
+            "actor": "deterministic-fixture",
+            "agent_requested": False,
+            "model_involved": False,
+            "sandbox_created": False,
+        }
+        if scenario not in _FIXTURE_INVESTIGATIONS:
+            raise InvoiceRemoteError(422, "Unknown local investigation fixture")
+        result = {**common, **_FIXTURE_INVESTIGATIONS[scenario]}
+        record = {
+            "challenge_id": challenge_id, "kind": scenario, "state": "finished", "result": result,
+            "events": [
+                {"sequence": 1, "reason": "Deterministic scenario selected"},
+                {"sequence": 2, "reason": "Expected boundary contract evaluated"},
+                {"sequence": 3, "reason": "Fixture receipt recorded; no sandbox created"},
+            ],
+            "created_at": _iso(), "receipt_retention": "process-memory-fixture",
+        }
+        self._challenges[challenge_id] = record
+        return record
+
     async def request(self, method: str, path: str, token: str, body: dict | None = None, *, review: bool = False, after: int = 0) -> dict:
         persona = self._persona(token)
         if review != (persona == "approver") and path != "/invoices/demo-session":
@@ -224,6 +294,16 @@ class LocalInvoiceDemoService:
             if method == "GET" and path.startswith("/invoices/scenarios/"):
                 scenario_id = path.rsplit("/", 1)[1]
                 return dict(self._scenarios.get(scenario_id) or (_ for _ in ()).throw(InvoiceRemoteError(404, "Local scenario not found")))
+            if method == "POST" and path == "/invoices/challenges":
+                challenge_id = body.get("challenge_id", "")
+                self._require_identifier(challenge_id)
+                if challenge_id in self._challenges:
+                    return {"challenge_id": challenge_id}
+                self._create_challenge(challenge_id, body.get("kind", ""))
+                return {"challenge_id": challenge_id}
+            if method == "GET" and re.fullmatch(r"/invoices/challenges/[a-f0-9]{32}", path):
+                challenge_id = path.rsplit("/", 1)[1]
+                return dict(self._challenges.get(challenge_id) or (_ for _ in ()).throw(InvoiceRemoteError(404, "Local challenge not found")))
             if method == "POST" and path == "/invoices/jobs":
                 self._require_identifier(body.get("job_id", ""))
                 return self._create_planning_job(body) if body.get("kind") == "planning" else self._create_execution_job(body)

@@ -73,6 +73,7 @@ class InvoiceController:
                 'kind':kind, 'sandbox_id':prepared['sandbox_id']})
         if proof is not None:
             proof['sandbox_stopped'] = True
+            proof['sandbox_retained'] = True
             rows = await self.admission.call('control.usp_record_invoice_sandbox_test', {**binding, 'receipt_json':json.dumps(proof,separators=(',',':'))})
             if len(rows) != 1 or rows[0] != {'job_id':run_id}:
                 raise SqlProcedureUnavailableError('sandbox test persistence unconfirmed; read existing receipts')

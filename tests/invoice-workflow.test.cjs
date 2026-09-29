@@ -9,7 +9,7 @@ function workflow(api, initial = {}) {
   const window = { invoiceView: view, addEventListener() {}, confirm() { return true; } };
   const storage = new Map(initial.storage || []);
   const context = { window, document: { createElement: element, getElementById: element }, api,
-    state: { session: { status: 'authenticated', persona: 'operator', authMode: initial.authMode } },
+    state: { invoiceInvestigationMode: initial.invoiceInvestigationMode, session: { status: 'authenticated', persona: 'operator', authMode: initial.authMode } },
     sessionStorage: { setItem: (key, value) => storage.set(key, value), getItem: key => storage.get(key), removeItem:key=>storage.delete(key) },
     crypto: require('node:crypto').webcrypto, setInterval() {}, setTimeout() {}, clearTimeout() {}, console, initial, storage };
   const source = fs.readFileSync(require.resolve('../src/task_agent/console/static/invoice-workflow.js'), 'utf8');
@@ -23,15 +23,59 @@ function workflow(api, initial = {}) {
     events = initial.events || [];
     demoSession = initial.demoSession || {source:'invoice-demo-session',session_id:'f'.repeat(32),state:'active',expires_at:new Date(Date.now()+14400000).toISOString(),can_end:true};
     demoPending = JSON.parse(storage.get('invoice-demo-pending:operator:test') || 'null');
-    sandboxInventory = initial.sandboxInventory || null;
-    window.fixture = { refreshPlans, planAction, reconnect, poll, start, loadHistory, history, createScenario, checkScenario, beginInvestigation, requestSandboxTest, refreshSandboxes, deleteSandbox, refreshDemo, demoAction, storage,
-      snapshot: () => ({ busy, plansLoading, plansError, message, plans, selected, historyError, draft, scenarioError, step, newInvestigation, job, demoPending, demoError }) };
+    sandboxInventory = initial.sandboxInventory || null; probe = initial.probe || null;
+    window.fixture = { refreshPlans, planAction, reconnect, poll, pollProbe, start, loadHistory, history, createScenario, checkScenario, beginInvestigation, requestSandboxTest, refreshSandboxes, deleteSandbox, refreshDemo, demoAction, modeOptions, storage,
+      snapshot: () => ({ busy, plansLoading, plansError, message, plans, selected, historyError, draft, scenarioError, step, newInvestigation, job, probe, probeMessage, demoPending, demoError, demoActive: demoActive(), demoSession }) };
   })();`), context);
   return window.fixture;
 }
 
 const planId = 'a'.repeat(32), runId = 'b'.repeat(32), otherRun = 'c'.repeat(32);
 const row = () => ({ state: 'draft', plan_hash: 'hash', review_expires_at: new Date(Date.now()+1800000).toISOString(), plan_json: { plan_id: planId, planning_run_id: runId, created_at: new Date().toISOString() } });
+
+test('mode choices distinguish the governed workflow from OpenShell sandbox tests', () => {
+  const fixture = workflow(async () => ({}));
+  assert.deepEqual(JSON.parse(JSON.stringify(fixture.modeOptions.map(({ value, title }) => ({ value, title })))), [
+    { value: 'workflow', title: 'Invoice workflow' },
+    { value: 'challenge', title: 'OpenShell sandbox tests' },
+  ]);
+  assert.match(fixture.modeOptions[0].description, /analysis through independent verification/);
+  assert.match(fixture.modeOptions[1].description, /filesystem and network policy enforcement/);
+});
+
+test('stale challenge status clears the browser pointer on a terminal 409', async () => {
+  const identifier = 'd'.repeat(32);
+  const error = new Error('Plan or run state changed');
+  error.status = 409;
+  const fixture = workflow(async path => {
+    assert.equal(path, '/api/invoices/challenges/' + identifier);
+    throw error;
+  }, {
+    probe: { challenge_id: identifier, state: 'admission-unconfirmed', events: [] },
+    storage: [['invoice-challenge:operator:test', identifier]],
+  });
+  await fixture.pollProbe();
+  assert.equal(fixture.storage.has('invoice-challenge:operator:test'), false);
+  assert.equal(fixture.snapshot().probe, null);
+  assert.match(fixture.snapshot().probeMessage, /earlier session|terminal state/);
+});
+
+test('public guest quota status is accepted as active without a human demo expiry', async () => {
+  const result = { source: 'public-demo-quota', session_id: null, state: 'active', expires_at: null, inflight: 0, cleanup: null, can_end: false };
+  const calls = [];
+  const fixture = workflow(async path => {
+    calls.push(path);
+    if (path === '/api/invoices/demo-session') return result;
+    if (path === '/api/invoices/plans') return { source: 'azure-sql', plans: [] };
+    throw new Error('unexpected public guest request: ' + path);
+  }, { demoSession: null, authMode: 'public-demo' });
+  await fixture.refreshDemo();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(fixture.snapshot().demoError, '');
+  assert.equal(fixture.snapshot().demoActive, true);
+  assert.equal(fixture.snapshot().demoSession.source, 'public-demo-quota');
+  assert.deepEqual(calls, ['/api/invoices/demo-session', '/api/invoices/plans']);
+});
 
 test('history loading and failure do not take the command lock or overwrite action status', async () => {
   let reject;
@@ -189,6 +233,26 @@ test('local demo clears a remembered run only when the backend confirms it is ab
   await deployed.poll();
   assert.equal(deployed.snapshot().job.job_id, runId);
   assert.match(deployed.snapshot().message, /run was not restarted/);
+});
+
+test('definitively absent remembered challenges clear in local and deployed modes', async () => {
+  const challengeId = 'e'.repeat(32);
+  const missing = Object.assign(new Error('Challenge not found'), { status: 404 });
+  const local = workflow(async () => { throw missing; }, {
+    invoiceInvestigationMode: 'fixture', probe: { challenge_id: challengeId, state: 'admission-unconfirmed', events: [] },
+    storage: [['invoice-challenge:operator:test', challengeId]],
+  });
+  await local.pollProbe();
+  assert.equal(local.snapshot().probe, null);
+  assert.equal(local.storage.has('invoice-challenge:operator:test'), false);
+  assert.match(local.snapshot().probeMessage, /Local preview was reset/);
+
+  const live = workflow(async () => { throw missing; }, {
+    invoiceInvestigationMode: 'openshell', probe: { challenge_id: challengeId, state: 'admission-unconfirmed', events: [] },
+  });
+  await live.pollProbe();
+  assert.equal(live.snapshot().probe, null);
+  assert.match(live.snapshot().probeMessage, /no longer available/);
 });
 
 test('capacity failure is explicit and never opens Propose or borrows a saved plan', async () => {

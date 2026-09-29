@@ -5,13 +5,16 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from task_agent.console.invoice_availability import configured_expiry, validate_availability
+from task_agent.console.invoice_availability import configured_expiry, validate_availability, validate_availability_mode
 from task_agent.console.invoice_service import create_invoice_service
 from task_agent.console.invoice_gateway import create_invoice_gateway
 from task_agent.console.invoice_observations import add_observation_route
 
 
 def test_unbounded_availability_requires_explicit_mode():
+    assert validate_availability_mode('leased') is None
+    assert validate_availability_mode('operator-managed') is None
+    with pytest.raises(ValueError): validate_availability_mode('typo')
     assert configured_expiry('operator-managed', None) is None
     with pytest.raises(ValueError): configured_expiry('leased', None)
     with pytest.raises(ValueError): configured_expiry('typo', None)

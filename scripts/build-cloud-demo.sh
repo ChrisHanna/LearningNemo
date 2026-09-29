@@ -11,6 +11,10 @@ case "${1:-all}" in
   human) kinds=(human) ;;
   *) echo "Expected all, console, agent, or human" >&2; exit 2 ;;
 esac
+if [[ " ${kinds[*]} " == *" console "* && -f "$state/cloud-console-overlay.image.txt" && ! -f "$root/src/task_agent/console/serviceops_service.py" ]]; then
+  echo "ServiceOps source is absent from this workspace; use scripts/build-cloud-console-overlay.sh to preserve the verified console base." >&2
+  exit 1
+fi
 [[ "${LEARNINGNEMO_AZURE_APPLY:-}" == cloud-demo-build ]]
 [[ -n "${AZURE_SUBSCRIPTION_ID:-}" ]]
 [[ "$(az account show --query id -o tsv)" == "$AZURE_SUBSCRIPTION_ID" ]]

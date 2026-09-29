@@ -1,9 +1,10 @@
 """Private human-facing invoice workflow API with independent reviewer authority."""
 
 from datetime import UTC, datetime
+import re
 from typing import Literal
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Path, Query
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict
@@ -45,7 +46,7 @@ class ScenarioRequest(BaseModel):
 class ChallengeRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     challenge_id: Identifier
-    kind: Literal['planning','execution']
+    kind: Literal['planning','execution','query-draft','allowed-file','denied-file','sql-denied','write-app-denied','approved-api','external-api-denied','symlink-escape-denied']
 
 
 class SandboxTestRequest(BaseModel):
@@ -73,11 +74,22 @@ def create_invoice_service(*, mode, repository, identity_verifier, expires_at, c
         response.headers['Cache-Control'] = 'no-store'
         return response
 
-    async def participant(value: HTTPAuthorizationCredentials | None = Depends(bearer)):
+    async def participant(
+        value: HTTPAuthorizationCredentials | None = Depends(bearer),
+        guest_subject: str | None = Header(default=None, alias="X-LearningNeMo-Guest-Subject"),
+        guest_persona: str | None = Header(default=None, alias="X-LearningNeMo-Guest-Persona"),
+    ):
         if value is None:
             raise HTTPException(401, 'Entra identity required')
         try:
-            user = await identity_verifier.verify(value.credentials)
+            if guest_subject is None and guest_persona is None:
+                user = await identity_verifier.verify(value.credentials)
+            else:
+                user = await identity_verifier.verify(
+                    value.credentials,
+                    guest_subject=guest_subject,
+                    guest_persona=guest_persona,
+                )
         except Exception:
             raise HTTPException(401, 'Identity verification failed') from None
         required = {'agent.invoke', 'tasks.read'} if user.persona == 'operator' else {'agent.invoke', 'plans.review'}
@@ -85,14 +97,41 @@ def create_invoice_service(*, mode, repository, identity_verifier, expires_at, c
             raise HTTPException(403, 'This identity has no authority for this service')
         return user
 
-    async def identity(user=Depends(participant), value: HTTPAuthorizationCredentials | None = Depends(bearer)):
+    async def identity(request: Request, user=Depends(participant), value: HTTPAuthorizationCredentials | None = Depends(bearer)):
         if user.persona != ('operator' if mode == 'operator' else 'approver'):
             raise HTTPException(403, 'This identity has no authority for this service')
-        if demo_session is not None:
+        if user.authentication == 'guest':
+            allowed = (
+                mode == 'operator'
+                and (
+                    request.method == 'GET'
+                    and (
+                        request.url.path in ('/invoices/plans', '/invoices/demo-session')
+                        or re.fullmatch(r'/invoices/scenarios/[a-f0-9]{32}', request.url.path)
+                        or re.fullmatch(r'/invoices/jobs/[a-f0-9]{32}(/events)?', request.url.path)
+                        or re.fullmatch(r'/invoices/challenges/[a-f0-9]{32}', request.url.path)
+                        or re.fullmatch(r'/invoices/plans/[a-f0-9]{32}/evidence', request.url.path)
+                    )
+                    or request.method == 'POST'
+                    and (
+                        request.url.path in ('/invoices/scenarios', '/invoices/jobs', '/invoices/challenges')
+                        or re.fullmatch(r'/invoices/plans/[a-f0-9]{32}/submit', request.url.path)
+                    )
+                )
+                or mode == 'review'
+                and (
+                    request.method == 'GET' and request.url.path == '/invoices/plans'
+                    or request.method == 'POST'
+                    and re.fullmatch(r'/invoices/plans/[a-f0-9]{32}/decision', request.url.path)
+                )
+            )
+            if not allowed:
+                raise HTTPException(403, 'This operation is not available in the public demo')
+        if demo_session is not None and user.authentication != 'guest':
             with demo_session.admitted():
                 yield user
         else:
-            release = await demo_check(value.credentials) if demo_check is not None else None
+            release = await demo_check(value.credentials) if demo_check is not None and user.authentication != 'guest' else None
             try:
                 yield user
             finally:
@@ -100,6 +139,8 @@ def create_invoice_service(*, mode, repository, identity_verifier, expires_at, c
                     await release()
 
     async def demo_operator(user=Depends(participant)):
+        if user.authentication == 'guest':
+            raise HTTPException(403, 'Public demo sessions are quota-managed')
         if user.persona != 'operator' or 'tasks.execute' not in user.scopes:
             raise HTTPException(403, 'Operator execution scope required for demo session control')
         if demo_session is None:
@@ -121,7 +162,12 @@ def create_invoice_service(*, mode, repository, identity_verifier, expires_at, c
 
     @app.get('/invoices/plans')
     async def plans(user=Depends(identity)):
-        rows = await repository.plans(user.subject_hash) if mode == 'operator' else await repository.reviews()
+        if mode == 'operator':
+            rows = await repository.plans(user.subject_hash)
+        elif user.authentication == 'guest':
+            rows = await repository.reviews(guest_only=True)
+        else:
+            rows = await repository.reviews()
         return {'source': 'azure-sql', 'plans': rows}
 
     if mode == 'operator':
@@ -140,6 +186,16 @@ def create_invoice_service(*, mode, repository, identity_verifier, expires_at, c
         @app.get('/invoices/demo-session')
         async def demo_status(user=Depends(participant)):
             if demo_session is None: raise HTTPException(503, 'Demo sessions unavailable')
+            if user.authentication == 'guest':
+                return {
+                    'source': 'public-demo-quota',
+                    'session_id': None,
+                    'state': 'active',
+                    'expires_at': None,
+                    'inflight': 0,
+                    'cleanup': None,
+                    'can_end': False,
+                }
             return {**demo_session.status(), 'can_end': user.persona == 'operator' and user.subject_hash == demo_session.owner}
 
         @app.post('/invoices/demo-session/start')
@@ -166,15 +222,20 @@ def create_invoice_service(*, mode, repository, identity_verifier, expires_at, c
         async def challenge(body: ChallengeRequest, background: BackgroundTasks, user=Depends(identity)):
             if 'tasks.execute' not in user.scopes: raise HTTPException(403, 'Operator execution scope required for sandbox probes')
             if challenges is None: raise HTTPException(503, 'Challenge service unavailable')
-            if demo_session is not None: demo_session.acquire()
+            from task_agent.control.invoice_challenges import TARGETS
+            if user.authentication == 'guest' and body.kind not in set(TARGETS) - {'planning', 'execution'}:
+                raise HTTPException(403, 'Public demo allows bounded Planning sandbox investigations only')
+            managed_admission = demo_session is not None and user.authentication != 'guest'
+            if managed_admission: demo_session.acquire()
             try:
+                quota = await repository.admit_guest_launch(body.challenge_id, user.subject_hash) if user.authentication == 'guest' else None
                 result = await challenges.enqueue(body.challenge_id, user.subject_hash, body.kind)
             except BaseException:
-                if demo_session is not None: demo_session.release()
+                if managed_admission: demo_session.release()
                 raise
-            if demo_session is None: background.add_task(challenges.work, body.challenge_id, user.subject_hash)
-            else: background.add_task(demo_session.run_admitted, challenges.work, body.challenge_id, user.subject_hash)
-            return result
+            if managed_admission: background.add_task(demo_session.run_admitted, challenges.work, body.challenge_id, user.subject_hash)
+            else: background.add_task(challenges.work, body.challenge_id, user.subject_hash)
+            return {**result, **({'quota': quota} if quota is not None else {})}
 
         @app.get('/invoices/challenges/{challenge_id}')
         async def challenge_status(challenge_id: str = Path(pattern=r'^[a-f0-9]{32}$'), user=Depends(identity)):
@@ -226,18 +287,22 @@ def create_invoice_service(*, mode, repository, identity_verifier, expires_at, c
             if body.target_id in TARGETS.values(): raise HTTPException(422, 'Probe targets cannot be used as agent jobs')
             if body.kind == 'execution' and 'tasks.execute' not in user.scopes:
                 raise HTTPException(403, 'Execution scope required')
+            if user.authentication == 'guest' and body.kind != 'planning':
+                raise HTTPException(403, 'Public demo execution is disabled')
             if (body.kind == 'execution') != (body.plan_hash is not None):
                 raise HTTPException(422, 'Execution requires the exact plan hash')
-            if demo_session is not None: demo_session.acquire()
+            managed_admission = demo_session is not None and user.authentication != 'guest'
+            if managed_admission: demo_session.acquire()
             try:
+                quota = await repository.admit_guest_launch(body.job_id, user.subject_hash) if user.authentication == 'guest' else None
                 result = await jobs.enqueue(job_id=body.job_id, sponsor_hash=user.subject_hash, kind=body.kind,
                     target_id=body.target_id, plan_hash=body.plan_hash)
             except BaseException:
-                if demo_session is not None: demo_session.release()
+                if managed_admission: demo_session.release()
                 raise
-            if demo_session is None: background.add_task(jobs.work, body.job_id, user.subject_hash)
-            else: background.add_task(demo_session.run_admitted, jobs.work, body.job_id, user.subject_hash)
-            return result
+            if managed_admission: background.add_task(demo_session.run_admitted, jobs.work, body.job_id, user.subject_hash)
+            else: background.add_task(jobs.work, body.job_id, user.subject_hash)
+            return {**result, **({'quota': quota} if quota is not None else {})}
 
         @app.get('/invoices/jobs/{job_id}')
         async def job_status(job_id: str = Path(pattern=r'^[a-f0-9]{32}$'), user=Depends(identity)):
@@ -297,7 +362,10 @@ def create_invoice_service(*, mode, repository, identity_verifier, expires_at, c
     else:
         @app.post('/invoices/plans/{plan_id}/decision')
         async def decide(body: DecisionRequest, plan_id: str = Path(pattern=r'^[a-f0-9]{32}$'), user=Depends(identity)):
-            await repository.decide(plan_id, body.plan_hash, user.subject_hash, body.decision)
+            if user.authentication == 'guest':
+                await repository.decide(plan_id, body.plan_hash, user.subject_hash, body.decision, guest_only=True)
+            else:
+                await repository.decide(plan_id, body.plan_hash, user.subject_hash, body.decision)
             return {'plan_id': plan_id, 'decision': body.decision}
 
     return app

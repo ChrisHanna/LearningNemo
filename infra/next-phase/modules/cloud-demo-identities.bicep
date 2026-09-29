@@ -1,7 +1,7 @@
 param location string
 param tags object
 
-var names = ['dashboard', 'controller', 'agent']
+var names = ['dashboard', 'controller', 'agent', 'public-demo']
 resource identities 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = [for name in names: {
   name: 'id-learningnemo-cloud-${name}-dev'
   location: location

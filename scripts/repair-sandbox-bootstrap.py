@@ -1,6 +1,7 @@
 """Host-admin-only rebootstrap for retained OpenShell 0.0.116 VM workspaces."""
 
 import base64
+from functools import cache
 import hashlib
 import json
 import os
@@ -18,6 +19,16 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
 
 
+def _message_class(schema, qualified_name):
+    pool = descriptor_pool.DescriptorPool()
+    pool.Add(schema)
+    descriptor = pool.FindMessageTypeByName(qualified_name)
+    if hasattr(message_factory, 'GetMessageClass'):
+        return message_factory.GetMessageClass(descriptor)
+    return message_factory.MessageFactory(pool).GetPrototype(descriptor)
+
+
+@cache
 def persisted_type():
     schema = descriptor_pb2.FileDescriptorProto(name='retained_sandbox.proto', package='retained', syntax='proto3')
     spec = schema.message_type.add(name='Spec')
@@ -26,10 +37,7 @@ def persisted_type():
     sandbox.field.add(name='id', number=1, label=1, type=9)
     sandbox.field.add(name='name', number=2, label=1, type=9)
     sandbox.field.add(name='spec', number=4, label=1, type=11, type_name='.retained.Spec')
-    pool = descriptor_pool.DescriptorPool()
-    pool.Add(schema)
-    descriptor = pool.FindMessageTypeByName('retained.Sandbox')
-    return message_factory.GetMessageClass(descriptor) if hasattr(message_factory, 'GetMessageClass') else message_factory.MessageFactory(pool).GetPrototype(descriptor)
+    return _message_class(schema, 'retained.Sandbox')
 
 
 def decode_part(value):
@@ -89,6 +97,7 @@ def private_write(path, content, uid=0, gid=0):
     os.replace(temporary, path)
 
 
+@cache
 def gateway_sandbox_type():
     schema = descriptor_pb2.FileDescriptorProto(name='gateway_recovery.proto', package='recovery', syntax='proto3')
     metadata = schema.message_type.add(name='Metadata')
@@ -110,9 +119,7 @@ def gateway_sandbox_type():
     sandbox.field.add(name='metadata', number=1, label=1, type=11, type_name='.recovery.Metadata')
     sandbox.field.add(name='spec', number=2, label=1, type=12)
     sandbox.field.add(name='status', number=3, label=1, type=11, type_name='.recovery.Status')
-    pool = descriptor_pool.DescriptorPool()
-    pool.Add(schema)
-    return message_factory.GetMessageClass(pool.FindMessageTypeByName('recovery.Sandbox'))
+    return _message_class(schema, 'recovery.Sandbox')
 
 
 def reconcile_stopped_gateway(database, backup, inventory, root):

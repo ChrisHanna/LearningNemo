@@ -25,6 +25,12 @@ account=az('account','show')
 assert account['id']==os.environ['AZURE_SUBSCRIPTION_ID']
 validate_budget(account, required=True, maximum_amount=50)
 environment=az('containerapp','env','show','--resource-group','rg-learningnemo-platform-dev','--name','cae-learningnemo-dev')
+dashboard=az('containerapp','show','--resource-group','rg-learningnemo-demo-dev','--name','ca-learningnemo-dashboard-dev')
+controller=az('containerapp','show','--resource-group','rg-learningnemo-demo-dev','--name','ca-learningnemo-controller-dev')
+demo_apps=az('containerapp','list','--resource-group','rg-learningnemo-demo-dev')
+public_demo=next((item for item in demo_apps if item['name']=='ca-learningnemo-public-demo-dev'),None)
+dashboard_env={item['name']:item.get('value','') for item in dashboard['properties']['template']['containers'][0].get('env',[])}
+public_domains=public_demo['properties']['configuration']['ingress'].get('customDomains',[]) if public_demo else []
 registries=az('acr','list','--resource-group','rg-learningnemo-artifacts-dev')
 assert len(registries)==1
 registry=registries[0]
@@ -41,9 +47,20 @@ values={
     'environmentId':environment['id'],'environmentDomain':environment['properties']['defaultDomain'],
     'registryName':registry['name'],'registryServer':registry['loginServer'],
     'consoleImage':images['console'],'agentImage':images['agent'],
+    'controllerImage':controller['properties']['template']['containers'][0]['image'],
     'tenantId':settings['ENTRA_TENANT_ID'],'apiClientId':settings['ENTRA_CLIENT_ID'],
     'publicClientId':settings['ENTRA_PUBLIC_CLIENT_ID'],'apimOrigin':apim['gatewayUrl'],
+    'serviceOpsOperatorOrigin':dashboard_env.get('LEARNINGNEMO_SERVICEOPS_OPERATOR_ORIGIN',''),
+    'serviceOpsReviewOrigin':dashboard_env.get('LEARNINGNEMO_SERVICEOPS_REVIEW_ORIGIN',''),
+    'invoiceAgentsPreviewEnabled':dashboard_env.get('INVOICE_AGENTS_PREVIEW_ENABLED','false'),
+    'publicDemoCertificateId':next((item.get('certificateId','') for item in public_domains if item.get('name')=='learningnemo.ai'),''),
 }
+assert re.fullmatch(re.escape(registry['loginServer'])+r'/learningnemo/cloud-console@sha256:[0-9a-f]{64}', values['controllerImage'])
+assert bool(values['serviceOpsOperatorOrigin']) == bool(values['serviceOpsReviewOrigin'])
+if values['serviceOpsOperatorOrigin']:
+    assert values['serviceOpsOperatorOrigin'] == f"https://ca-nemo-serviceops-operator-dev.internal.{environment['properties']['defaultDomain']}"
+    assert values['serviceOpsReviewOrigin'] == f"https://ca-nemo-serviceops-review-dev.internal.{environment['properties']['defaultDomain']}"
+assert values['invoiceAgentsPreviewEnabled'] in ('true','false')
 for kind in ('review','incident','execution'):
     name=f'LEARNINGNEMO_{kind.upper()}_ORIGIN'
     origin=os.environ.get(name,'')
@@ -57,7 +74,8 @@ for kind in ('operator','review'):
     if origin:
         assert origin==f"https://ca-nemo-invoice-{kind}-dev.internal.{environment['properties']['defaultDomain']}"
         receipt=json.loads((state/'invoice-services.verified.json').read_text())
-        assert receipt['image']==(state/'invoice-services.image.txt').read_text().strip()
+        live_invoice=az('containerapp','show','--resource-group','rg-learningnemo-invoice-dev','--name',f'ca-nemo-invoice-{kind}-dev')
+        assert receipt['image']==live_invoice['properties']['template']['containers'][0]['image']
         if availability_mode=='operator-managed':
             assert receipt.get('availabilityMode')=='operator-managed' and receipt.get('expiresAt') is None
         else:

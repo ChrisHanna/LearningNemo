@@ -84,10 +84,10 @@
       return section;
     }
     if (mode === 'challenge') {
-      const proof = view.challengeProof(probe || {kind:probeKind}); section.append(node('p', 'CONTROLLED SANDBOX PROBE', 'eyebrow'), node('h2', probe ? proof.title : 'No challenge run'));
+      const proof = view.challengeProof(probe || {kind:probeKind}); section.append(node('p', 'SANDBOX INVESTIGATION', 'eyebrow'), node('h2', probe ? proof.title : 'No investigation run'));
       const chain = node('ol', '', 'audience-challenge-chain');
-      for (const [label, text] of [['Attempt', view.tools[proof.forbidden]], ['Boundary', 'OpenShell route policy'], ['Verdict', proof.confirmed ? 'Denied with evidence' : 'Not confirmed'], ['Proof', proof.source]]) { const item=node('li'); item.append(node('small',label),node('strong',text));chain.append(item); }
-      section.append(chain, node('p', 'No model or database capability issued', 'audience-source'));
+      for (const [label, text] of [['Attempt', proof.investigation?.attempt||view.tools[proof.forbidden]], ['Boundary', proof.investigation?.boundary||'OpenShell route policy'], ['Verdict', proof.confirmed?'Live evidence confirmed':proof.fixture?'Local fixture demonstrated':'Not confirmed'], ['Proof', proof.source]]) { const item=node('li'); item.append(node('small',label),node('strong',text));chain.append(item); }
+      section.append(chain, node('p', 'Deterministic investigation harness / no model or database capability issued', 'audience-source'));
       if (probe?.result?.denial_evidence?.length) { const receipt=node('details','','','audience-probe:'+probe.challenge_id);receipt.append(node('summary','Recorded OpenShell receipt'),node('pre',probe.result.denial_evidence.join('\n'),'','audience-probe-log:'+probe.challenge_id));section.append(receipt); }
       return section;
     }

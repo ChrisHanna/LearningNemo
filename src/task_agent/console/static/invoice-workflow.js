@@ -10,7 +10,7 @@
   let draft = view.restoreSelection(null).draft, renderPending = false;
   const observations = new Map();
   const traceSelections = new Map();
-  let probe = null, probeTimer = null, probePolling = false, probeKind = 'planning';
+  let probe = null, probeTimer = null, probePolling = false, probeKind = 'query-draft';
   let revealArchitecture = false;
   let runtimeSnapshot = null, runtimeError = '';
   let mode = 'workflow', probeMessage = '', selectionLoaded = false;
@@ -21,7 +21,24 @@
   let sandboxInventory = null, sandboxLoading = false, sandboxError = '';
   const pendingSandboxDeletes = new Set();
   let demoSession = null, demoLoading = false, demoError = '', demoTimer = null, demoPending = null, demoWriting = false, demoVersion = 0;
-  const demoActive = () => demoSession?.state === 'active' && Date.parse(demoSession.expires_at) > Date.now() && demoPending?.action !== 'end';
+  const modeOptions = [
+    {
+      value: 'workflow',
+      title: 'Invoice workflow',
+      description: 'Follow the governed agent process from analysis through independent verification.',
+      icon: 'workflow',
+    },
+    {
+      value: 'challenge',
+      title: 'OpenShell sandbox tests',
+      description: 'Run isolated scenarios to test filesystem and network policy enforcement.',
+      icon: 'shield-check',
+    },
+  ];
+  const publicGuest = () => state.session?.authMode === 'public-demo';
+  const demoActive = () => demoSession?.state === 'active'
+    && (demoSession.source === 'public-demo-quota' || Date.parse(demoSession.expires_at) > Date.now())
+    && demoPending?.action !== 'end';
   async function refreshDemo(current = generation) {
     if(demoLoading || demoWriting || !signedIn())return;
     clearTimeout(demoTimer);demoLoading=true;
@@ -29,7 +46,7 @@
     try {
       const result=await api('/api/invoices/demo-session');
       if(current!==generation || version!==demoVersion)return;
-      if(result.source!=='invoice-demo-session' || !['idle','active','ending'].includes(result.state))throw new Error('Demo status unconfirmed');
+      if(!['invoice-demo-session','public-demo-quota'].includes(result.source) || !['idle','active','ending'].includes(result.state))throw new Error('Demo status unconfirmed');
       demoSession=result;demoError='';
       if(demoPending && result.session_id===demoPending.session_id && (demoPending.action==='start' || ['ending','idle'].includes(result.state))) {
         demoPending=null;sessionStorage.removeItem('invoice-demo-pending:'+identity);
@@ -41,7 +58,7 @@
         refreshPlans(current);
         if(!approver()) {
           if(draft.scenarioId)checkScenario(current);
-          refreshSandboxes(current);
+          if(!publicGuest())refreshSandboxes(current);
           if(job)poll(current);
           if(probe)pollProbe(current);
         }
@@ -77,7 +94,7 @@
     },true);
   }
   async function refreshSandboxes(current = generation) {
-    if(!demoActive() || sandboxLoading || !view.permissions(state.session).investigate || presenting)return;
+    if(publicGuest() || !demoActive() || sandboxLoading || !view.permissions(state.session).investigate || presenting)return;
     sandboxLoading=true;sandboxError='';render();
     try {
       const result=await api('/api/invoices/sandboxes');
@@ -135,10 +152,21 @@
       const result = await api('/api/invoices/challenges/' + identifier);
       if (current !== generation || probe?.challenge_id !== identifier) return;
       if (result.challenge_id !== identifier) throw new Error('Challenge receipt differs');
-      if (!probe.kind && ['planning','execution'].includes(result.kind)) probeKind = result.kind;
+      if (!probe.kind && (window.invoiceView.investigations[result.kind] || ['planning','execution'].includes(result.kind))) probeKind = result.kind;
       probe = result; render();
       if (['queued','running'].includes(result.state)) probeTimer = setTimeout(() => pollProbe(current), 3000);
-    } catch (error) { if (current === generation) { probeMessage = error.message + ' Challenge observation unconfirmed; no replay.'; render(); } }
+    } catch (error) {
+      if (current === generation && [404,409].includes(error.status)) {
+        sessionStorage.removeItem('invoice-challenge:'+identity);
+        probe = null;
+        probeMessage = error.status === 409
+          ? 'The saved challenge belongs to an earlier session or has reached a terminal state. Choose a test scenario to start again.'
+          : state.invoiceInvestigationMode === 'fixture'
+            ? 'Local preview was reset. Choose a scenario to start again.'
+            : 'The saved challenge is no longer available. Choose a test scenario to start again.';
+        render();
+      } else if (current === generation) { probeMessage = error.message + ' Challenge observation unconfirmed; no replay.'; render(); }
+    }
     finally { probePolling = false; }
   }
   async function startProbe(kind) {
@@ -414,10 +442,10 @@
       if (focused) [...root.querySelectorAll(focusable)].filter(element => focusKey(element) === focused.key)[focused.index]?.focus({ preventScroll: true });
       return;
     }
-    find('sessionNextAction').textContent = mode === 'challenge' ? view.sandboxTest(record?.job,relevant,pendingSandboxTests.has(runId)).title : view.nextAction(state.session, row, job, probe, newInvestigation, draft.scenarioId);
+    find('sessionNextAction').textContent = mode === 'challenge' ? probe ? (probe.state === 'finished' ? (probe.result?.evidence_mode === 'live' ? 'Review the bound OpenShell receipt.' : 'Preview complete; no sandbox was created.') : 'Sandbox launch or observation is in progress.') : state.invoiceInvestigationMode === 'openshell' ? 'Choose a test scenario to launch a fresh OpenShell sandbox.' : 'Choose a walkthrough test. No sandbox will be created.' : view.nextAction(state.session, row, job, probe, newInvestigation, draft.scenarioId);
     if (mode === 'workflow' && newInvestigation && draft.scenarioId && !active && !(matchingJob && job.state === 'uncertain')) find('sessionNextAction').textContent = view.scenarioStatus(draft.scenarioStatus).label;
     const heading = node('header', '', 'mission-heading');
-    const title = node('div'); title.append(node('h1', mode === 'challenge' ? 'Test the selected agent sandbox' : 'Invoice integrity'));
+    const title = node('div'); title.append(node('h1', mode === 'challenge' ? 'OpenShell sandbox tests' : 'Invoice integrity'));
     const toolbar = node('div', '', 'invoice-toolbar');
     if (demoActive() && access.investigate && mode === 'workflow') {
       const create = button('New investigation', 'plus', beginInvestigation, busy); create.className = 'button button-primary'; toolbar.append(create);
@@ -435,7 +463,8 @@
       const demo=node('section','','invoice-demo-session');demo.setAttribute('aria-label','Demo session');
       const title=demoPending?.action==='end'?'Demo end unconfirmed':demoActive()?'Demo active':demoSession?.state==='ending'?'Demo ending':demoSession?.state==='idle'?'Demo idle':'Demo status unavailable';
       demo.append(node('strong',title));
-      if(demoActive())demo.append(node('time','Ends '+new Date(demoSession.expires_at).toUTCString()));
+      if(demoActive() && demoSession.source==='public-demo-quota')demo.append(node('span','Quota-managed guest access'));
+      else if(demoActive())demo.append(node('time','Ends '+new Date(demoSession.expires_at).toUTCString()));
       if(demoSession?.state==='ending')demo.append(node('span',demoSession.inflight?'Waiting for admitted work: '+demoSession.inflight:'Final cleanup pending'));
       if(demoSession?.cleanup)demo.append(node('span','Final cleanup '+demoSession.cleanup));
       if(access.execute && demoSession?.state==='idle')demo.append(button('Start demo','play',()=>demoAction('start'),busy||Boolean(demoPending)||demoLoading));
@@ -456,14 +485,22 @@
       }
     }
     if (access.investigate) {
-      const modes = node('div', '', 'invoice-modes'); modes.setAttribute('role', 'tablist'); modes.setAttribute('aria-label', 'Demo mode');
-      for (const [value, title, icon] of [['workflow','Invoice workflow','workflow'],['challenge','Sandbox challenge','shield-check']]) {
-        const tab = button(title, icon, () => selectMode(value), busy); tab.id = 'invoice-mode-'+value;
+      const modePicker = node('section', '', 'invoice-mode-picker'); modePicker.setAttribute('aria-labelledby', 'invoiceModeTitle');
+      const modeHeading = node('div', '', 'invoice-mode-heading');
+      const modeTitle = node('h2', 'Explore the workflow or test OpenShell'); modeTitle.id = 'invoiceModeTitle';
+      modeHeading.append(node('span', 'CHOOSE AN EXPERIENCE', 'eyebrow'), modeTitle,
+        node('p', 'The workflow demonstrates governed invoice operations. OpenShell tests launch focused scenarios that show what the sandbox permits or blocks.'));
+      const modes = node('div', '', 'invoice-modes'); modes.setAttribute('role', 'tablist'); modes.setAttribute('aria-label', 'Demo experience');
+      for (const { value, title, description, icon } of modeOptions) {
+        const tab = button('', icon, () => selectMode(value), busy); tab.id = 'invoice-mode-'+value;
+        const copy = node('span', '', 'invoice-mode-copy'); copy.append(node('strong', title), node('small', description)); tab.append(copy);
+        tab.setAttribute('aria-label', title + '. ' + description);
         tab.setAttribute('role','tab'); tab.setAttribute('aria-selected', String(mode === value)); tab.setAttribute('aria-controls', value === 'workflow' ? 'invoiceFlowPanel' : 'invoiceChallengePanel'); tab.tabIndex = mode === value ? 0 : -1; modes.append(tab);
       }
-      modes.addEventListener('keydown', event => { if (['ArrowLeft','ArrowRight','Home','End'].includes(event.key) && !busy) { event.preventDefault(); const value = ['ArrowLeft','Home'].includes(event.key) ? 'workflow' : 'challenge'; selectMode(value); find('invoice-mode-'+value)?.focus(); } }); root.append(modes);
+      modes.addEventListener('keydown', event => { if (['ArrowLeft','ArrowRight','Home','End'].includes(event.key) && !busy) { event.preventDefault(); const value = ['ArrowLeft','Home'].includes(event.key) ? 'workflow' : 'challenge'; selectMode(value); find('invoice-mode-'+value)?.focus(); } });
+      modePicker.append(modeHeading, modes); root.append(modePicker);
     }
-    if (access.investigate) {
+    if (access.investigate && !publicGuest() && state.invoiceInvestigationMode === 'openshell') {
       const availability = node('details', '', 'invoice-runtime', 'runtime-availability'); availability.setAttribute('aria-label', 'Runtime availability'); availability.append(node('summary', runtimeError ? 'Runtime check failed' : runtime.label));
       const status = node('div'); status.append(node('strong', runtimeError || runtime.label));
       if (runtimeSnapshot?.expiresAt) status.append(node('small', 'Observed host lease: '+new Date(runtimeSnapshot.expiresAt).toUTCString()));
@@ -582,10 +619,17 @@
           primaryAction(stageActions, 'Approve plan', () => planAction('decision','approve'), !access.approve || !snapshot || !review.allowed); stageActions.append(button('Reject plan','circle-x', () => planAction('decision','reject'), busy || !access.approve || !review.allowed));
         }
         if (step === 2 && approver() && ['approved','rejected'].includes(row.state)) stageActions.append(node('p', row.state === 'approved' ? 'Plan approved. Return to the sponsoring Operator account for execution.' : 'Plan rejected. No execution authority was granted.'));
-        if (step === 3 && row.state === 'approved' && !approver()) { const eligibility = view.executionStatus(row); stageActions.append(node('p', eligibility.label)); if (Number.isFinite(eligibility.expires)) stageActions.append(node('small','Start execution before '+new Date(eligibility.expires).toLocaleString())); primaryAction(stageActions, 'Start Execution agent', () => start('execution', row.plan_json.plan_id, row.plan_hash), !eligibility.allowed || active || runtime.blocked || !access.execute); }
-        if (step === 3 && row.state === 'executing' && !approver()) stageActions.append(button('Inspect execution receipts', 'scan-search', () => planAction('reconcile'), busy || active));
+        if (step === 3 && row.state === 'approved' && !approver()) {
+          const eligibility = view.executionStatus(row); stageActions.append(node('p', eligibility.label));
+          if (publicGuest()) stageActions.append(node('strong', 'Execution requires an Entra-protected Operator account.'));
+          else {
+            if (Number.isFinite(eligibility.expires)) stageActions.append(node('small','Start execution before '+new Date(eligibility.expires).toLocaleString()));
+            primaryAction(stageActions, 'Start Execution agent', () => start('execution', row.plan_json.plan_id, row.plan_hash), !eligibility.allowed || active || runtime.blocked || !access.execute);
+          }
+        }
+        if (step === 3 && row.state === 'executing' && !approver() && !publicGuest()) stageActions.append(button('Inspect execution receipts', 'scan-search', () => planAction('reconcile'), busy || active));
         if (stageActions.childElementCount) panel.append(stageActions);
-        if (step === 4) { if (row.state === 'verified' && view.verifiedChecks(row)) panel.append(button('Acknowledge completion','check', () => planAction('complete'),busy || !access.execute)); else if (row.state === 'completed') panel.append(node('strong','Verified and completed')); }
+        if (step === 4) { if (row.state === 'verified' && view.verifiedChecks(row) && !publicGuest()) panel.append(button('Acknowledge completion','check', () => planAction('complete'),busy || !access.execute)); else if (row.state === 'completed') panel.append(node('strong','Verified and completed')); }
       } else if (step !== 0) panel.append(node('p', approver() ? 'No submitted plans awaiting review.' : 'No plan returned for this account.'));
       if (row && !approver()) {
         const scenarioExpired = Date.parse(row.scenario_expires_at) <= Date.now();
@@ -598,22 +642,21 @@
     if (record) evidence.append(monitor);
     evidence.append(invoiceExperience.trace({job:record?.job,events:relevant,row,stage:step,sequence:traceSelections.get(runId),onSelect:onTrace}));
     if (runId && !approver()) evidence.append(button('Reconnect observations','refresh-cw', reconnect,busy || loadingHistory.has(runId)));
-    if (record?.job && !approver()) evidence.append(window.renderInvoiceSandboxTest({job:record.job,events:relevant,pending:pendingSandboxTests.has(runId),permitted:access.execute,busy,request:requestSandboxTest}));
+    if (record?.job && !approver() && !publicGuest()) evidence.append(window.renderInvoiceSandboxTest({job:record.job,events:relevant,pending:pendingSandboxTests.has(runId),permitted:access.execute,busy,request:requestSandboxTest}));
     if (historyError) evidence.append(node('p',historyError,'mission-action-status'));
     evidence.append(node('p',chapter.lesson,'invoice-stage-lesson'));
     if (signedIn()) layout.append(evidence);
     layout.classList.toggle('invoice-workbench-single', !signedIn()); flow.append(layout);
     if (mode === 'workflow') {
       if (probe && !['finished','uncertain'].includes(probe.state)) {
-        const notice = node('div', '', 'invoice-mode-notice'); notice.append(node('p', 'A sandbox challenge is active or unconfirmed. New sandbox work is blocked.'), button('Open challenge status', 'arrow-right', () => selectMode('challenge'), busy)); flow.prepend(notice);
+        const notice = node('div', '', 'invoice-mode-notice'); notice.append(node('p', 'A sandbox investigation is active or unconfirmed. New sandbox work is blocked.'), button('Open investigation status', 'arrow-right', () => selectMode('challenge'), busy)); flow.prepend(notice);
       }
       root.append(flow);
     }
     if (access.investigate) {
       const challenges = node('section'); challenges.id = 'invoiceChallengePanel'; challenges.setAttribute('role','tabpanel'); challenges.setAttribute('aria-labelledby','invoice-mode-challenge');
-      challenges.append(window.renderInvoiceSandboxTest({job:record?.job,events:relevant,pending:pendingSandboxTests.has(runId),permitted:access.execute,busy,request:requestSandboxTest,reconnect}));
-      if (!record?.job) challenges.append(button('Open invoice workflow','arrow-right',()=>selectMode('workflow'),busy));
-      const isolated=node('details','','invoice-secondary','separate-policy-test');isolated.append(node('summary','Separate policy test in a new sandbox'),window.renderInvoiceChallenge({ result:probe, kind:probeKind, onKind:value=>{ probeKind=value; render(true); }, permitted:access.execute && !runtime.blocked, blocked:active, busy, start:startProbe, reconnect:()=>pollProbe() }));challenges.append(isolated);
+      const isolated=node('details','','invoice-secondary investigation-scenarios','separate-policy-test');isolated.open=true;isolated.append(node('summary','Investigation scenarios'),window.renderInvoiceChallenge({ result:probe, kind:probeKind, onKind:value=>{ probeKind=value; render(true); }, permitted:access.execute && !runtime.blocked, blocked:active, busy, start:startProbe, reconnect:()=>pollProbe(), executionMode:state.invoiceInvestigationMode }));challenges.append(isolated);
+      if (record?.job) challenges.append(window.renderInvoiceSandboxTest({job:record.job,events:relevant,pending:pendingSandboxTests.has(runId),permitted:access.execute,busy,request:requestSandboxTest,reconnect}));
       const status = node('p',probeMessage,'mission-action-status'); status.setAttribute('role','status'); challenges.append(status);
       if (mode === 'challenge') root.append(challenges);
     }
@@ -633,7 +676,7 @@
     find('missionWorkspace').hidden = true; find('identityWorkspace').hidden = true;
     const next = signedIn() ? state.session.persona + ':' + (state.session.storageKey || state.session.accountFingerprint) : null;
     const identityChanged = next !== identity;
-    if (identityChanged) { demoSession=null;demoLoading=false;demoError='';demoPending=null;demoWriting=false;demoVersion+=1;clearTimeout(demoTimer);presenting = false; traceSelections.clear(); pendingSandboxTests.clear(); pendingSandboxDeletes.clear(); sandboxInventory=null; sandboxLoading=false; sandboxError=''; mode = 'workflow'; probeMessage = ''; selectionLoaded = false; probeKind = 'planning'; runtimeSnapshot = null; runtimeError = ''; plansRead += 1; plansLoading = false; plansError = ''; historyError = ''; scenarioLoading = false; scenarioError = ''; }
+    if (identityChanged) { demoSession=null;demoLoading=false;demoError='';demoPending=null;demoWriting=false;demoVersion+=1;clearTimeout(demoTimer);presenting = false; traceSelections.clear(); pendingSandboxTests.clear(); pendingSandboxDeletes.clear(); sandboxInventory=null; sandboxLoading=false; sandboxError=''; mode = 'workflow'; probeMessage = ''; selectionLoaded = false; probeKind = 'query-draft'; runtimeSnapshot = null; runtimeError = ''; plansRead += 1; plansLoading = false; plansError = ''; historyError = ''; scenarioLoading = false; scenarioError = ''; }
     if (identityChanged) { identity = next; generation += 1; navigation += 1; newInvestigation = false; newJobId = null; draft = view.restoreSelection(null).draft; clearTimeout(timer); clearTimeout(probeTimer); observations.clear(); probe=null; history.clear(); loadingHistory.clear(); plans = []; selected = null; job = null; events = []; cursor = 0; busy = false; message = ''; connected = false; observedAt = null; step = approver() ? 2 : 0; component = view.chapters[step].focus;
       if (identity) {
         const legacyIdentity = state.session.persona + ':' + state.session.accountFingerprint;

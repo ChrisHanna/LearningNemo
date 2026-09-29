@@ -74,6 +74,39 @@ class DemoSignInRequest(BaseModel):
     persona: Literal["operator", "approver"] | None = None
 
 
+def _public_demo_api_allowed(method: str, path: str) -> bool:
+    if method == "GET":
+        return path in {
+            "/api/capabilities",
+            "/api/showcase",
+            "/api/invoices/plans",
+            "/api/invoices/demo-session",
+        } or any(
+            re.fullmatch(pattern, path)
+            for pattern in (
+                r"/api/invoices/scenarios/[a-f0-9]{32}",
+                r"/api/invoices/jobs/[a-f0-9]{32}",
+                r"/api/invoices/jobs/[a-f0-9]{32}/events",
+                r"/api/invoices/challenges/[a-f0-9]{32}",
+                r"/api/invoices/plans/[a-f0-9]{32}/evidence",
+            )
+        )
+    if method == "POST":
+        return path in {
+            "/api/auth/review",
+            "/api/invoices/scenarios",
+            "/api/invoices/jobs",
+            "/api/invoices/challenges",
+        } or any(
+            re.fullmatch(pattern, path)
+            for pattern in (
+                r"/api/invoices/plans/[a-f0-9]{32}/submit",
+                r"/api/invoices/review/[a-f0-9]{32}",
+            )
+        )
+    return False
+
+
 def create_app(
     settings: EntraTestSettings,
     agent_url: str,
@@ -120,10 +153,13 @@ def create_app(
         if host_policy.cloud and request.url.path.startswith("/api/") and request.url.path not in {
             "/api/bootstrap", "/api/auth", "/api/auth/start", "/api/live-workspace",
         }:
+            public_demo = bool(browser_session and getattr(browser_session.auth, "brokered", False))
+            if public_demo and not _public_demo_api_allowed(request.method, request.url.path):
+                return _secured_error(403, "This operation is not available in the public demo")
             try:
                 user = browser_session.auth.current_user() if browser_session else None
-                decision = await identity_verifier.verify(user.access_token) if user else None
-                permitted = decision and (
+                decision = await identity_verifier.verify(user.access_token) if user and not public_demo else None
+                permitted = public_demo and user is not None or decision and (
                     decision.get("canRead")
                     or (decision.get("canReview") and request.method == "GET" and (request.url.path in APPROVER_READ_PATHS or invoice_service is not None and request.url.path == '/api/invoices/plans'))
                     or (invoice_service is not None and decision.get('canReview') and 'plans.review' in user.scopes
@@ -135,7 +171,7 @@ def create_app(
                 if not permitted:
                     return _secured_error(403, "This operation is not permitted for your assigned demo role")
             except Exception:
-                return _secured_error(401, "Sign in with an assigned demo account")
+                return _secured_error(401, "Choose a demo role or sign in with an assigned account")
 
         if request.url.path.startswith("/api/") and request.method not in {"GET", "HEAD", "OPTIONS"}:
             if browser_session is None:
@@ -185,6 +221,7 @@ def create_app(
             "hosting": "azure" if host_policy.cloud else "local",
             "reviewEnabled": review_service is not None or invoice_service is not None,
             "invoiceEnabled": invoice_service is not None,
+            "invoiceInvestigationMode": getattr(invoice_service, "investigation_mode", "openshell") if invoice_service is not None else None,
         }
 
     @app.get("/api/capabilities")
@@ -208,19 +245,32 @@ def create_app(
     async def invoice_forward(request, method, path, body=None, *, reviewer=False, after=0):
         if invoice_service is None:
             raise HTTPException(503, 'Invoice agent workflow is not configured')
+        auth = current_auth(request)
         if reviewer:
             try:
-                user = current_auth(request).current_user()
+                user = auth.current_user()
             except RuntimeError:
                 raise HTTPException(401, 'Approver sign-in required') from None
             if user.persona != 'approver' or 'plans.review' not in user.scopes:
                 raise HTTPException(403, 'Independent Approver scope and role required')
         else:
             user = require_incident_operator(request, read_only=True)
+            if getattr(auth, "brokered", False) and path == '/invoices/jobs' and body.get('kind') == 'execution':
+                raise HTTPException(403, 'Public demo execution is disabled')
             if method == 'POST' and (path.endswith(('/complete','/reconcile','/sandbox-test','/delete')) or path in ('/invoices/scenarios','/invoices/challenges','/invoices/demo-session/start','/invoices/demo-session/end') or path == '/invoices/jobs' and body.get('kind') == 'execution') and 'tasks.execute' not in user.scopes:
                 raise HTTPException(403, 'Execution scope required')
         try:
-            return await invoice_service.request(method, path, user.access_token, body, review=reviewer and path != '/invoices/demo-session', after=after)
+            guest_subject = getattr(auth, "broker_subject", None)
+            return await invoice_service.request(
+                method,
+                path,
+                user.access_token,
+                body,
+                review=reviewer and path != '/invoices/demo-session',
+                after=after,
+                guest_subject=guest_subject,
+                guest_persona=user.persona if guest_subject else None,
+            )
         except InvoiceRemoteError as error:
             raise HTTPException(error.status_code, str(error)) from error
 

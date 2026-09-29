@@ -60,7 +60,7 @@ async def test_admitted_background_failure_releases_without_replay():
     assert calls == [True] and session.inflight == 0
 
 
-async def test_idle_monitor_has_zero_sql_and_end_cleanup_runs_once(monkeypatch):
+async def test_monitor_runs_at_startup_and_end_cleanup_runs_once(monkeypatch):
     import asyncio
     from types import SimpleNamespace
     from task_agent.console import invoice_retention_worker as worker
@@ -72,9 +72,9 @@ async def test_idle_monitor_has_zero_sql_and_end_cleanup_runs_once(monkeypatch):
     controller=SimpleNamespace(lock=asyncio.Lock())
     manager=worker.InvoiceSandboxManager(None,None,controller)
     async with worker.retention_lifespan(None,None,controller,manager=manager)(None):
-        yielded=asyncio.Event();asyncio.get_running_loop().call_soon(yielded.set);await yielded.wait()
-        assert calls.empty()
+        await asyncio.wait_for(calls.get(),1)
         manager.demo.start('a'*32,'owner')
+        manager.notify()
         await asyncio.wait_for(calls.get(),1)
         manager.demo.acquire()
         manager.demo.end('a'*32,'owner')

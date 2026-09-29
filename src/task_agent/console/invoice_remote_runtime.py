@@ -12,6 +12,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from task_agent.console.invoice_availability import validate_availability_mode
 from task_agent.control.canonical import content_hash
 from task_agent.control.invoice_sandbox import IMAGE, SandboxCapacityError, sandbox_name
 
@@ -87,8 +88,7 @@ except RuntimeError:
 
 def prepare_script(kind, run_id, image, policy, availability_mode='leased', provider_profile=None):
     name = sandbox_name(kind, run_id)
-    if availability_mode not in ('leased','operator-managed'):
-        raise ValueError('explicit workspace availability mode required')
+    validate_availability_mode(availability_mode)
     if not IMAGE.fullmatch(image):
         raise ValueError('pinned invoice image required')
     encoded = base64.b64encode(policy.encode()).decode()
@@ -118,6 +118,23 @@ assert os.fstat(lifecycle.fileno()).st_uid==0 and os.fstat(lifecycle.fileno()).s
 fcntl.flock(lifecycle,fcntl.LOCK_EX)
 inventory=json.loads(cli('sandbox','list','--output','json'))
 assert isinstance(inventory,list)
+def sandbox_quiescent(item):
+    if item.get('phase')=='Stopped': return True
+    if item.get('phase')!='Error': return False
+    identifier=item.get('id')
+    sandbox_name=item.get('name')
+    if type(identifier)!=str or type(sandbox_name)!=str: return False
+    compact=identifier.replace('-','')
+    if len(compact)!=32 or any(character not in '0123456789abcdefABCDEF' for character in compact): return False
+    identifier=str(uuid.UUID(identifier))
+    runtime=pathlib.Path('/home/sawadmin/.local/state/openshell/vm/sandboxes')/identifier
+    if runtime.exists() or runtime.is_symlink(): return False
+    needles=(identifier.encode(),sandbox_name.encode())
+    for command in pathlib.Path('/proc').glob('[0-9]*/cmdline'):
+        try: content=command.read_bytes()[:65536]
+        except (FileNotFoundError,PermissionError,OSError): continue
+        if any(needle in content for needle in needles): return False
+    return True
 if len(inventory)>=24:
     print('INVOICE_ADMISSION_BLOCKED '+json.dumps({{'run_id':{run_id!r},'reason':'sandbox-capacity','retained':len(inventory),'limit':24}}))
     raise SystemExit(0)
@@ -132,7 +149,7 @@ with open(os.open(policy,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o644),'wb') as output
 os.chmod(policy,0o644)
 disk=os.statvfs(root)
 assert disk.f_bavail*disk.f_frsize>=4*1024**3, 'retained workspace free-space floor reached'
-assert all(item['phase']=='Stopped' for item in inventory), 'another sandbox is active'
+assert all(sandbox_quiescent(item) for item in inventory), 'another sandbox is active or an Error record is not quiescent'
 assert all(item['name']!=name for item in inventory)
 watchdog=subprocess.run(['runuser','-u','sawadmin','--','env',*[key+'='+value for key,value in environment.items()],'systemd-run','--user','--unit','invoice-provision-expire-'+{run_id!r},'--on-active','1200s','openshell','--gateway','openshell','sandbox','stop',name],capture_output=True,timeout=30)
 assert watchdog.returncode==0
@@ -192,8 +209,7 @@ class AzureInvoiceRuntime:
     def __init__(self, *, compute_client, image, policies, availability_mode='leased', credential_mode='manifest'):
         if not IMAGE.fullmatch(image):
             raise ValueError('fixed invoice image required')
-        if availability_mode not in ('leased','operator-managed'):
-            raise ValueError('explicit workspace availability mode required')
+        validate_availability_mode(availability_mode)
         if credential_mode not in ('manifest','provider'):
             raise ValueError('explicit run credential mode required')
         self.availability_mode, self.credential_mode = availability_mode, credential_mode

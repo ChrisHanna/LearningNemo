@@ -31,7 +31,55 @@
     <script src="/assets/invoice-workflow.js" defer></script>
   </head>
   <body>
-    <div class="app-shell">
+    <main id="loginExperience" class="login-experience" aria-labelledby="loginTitle">
+      <header class="login-header">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true"><i data-lucide="scan-line"></i></span>
+          <div><strong>LearningNeMo</strong><span>Governed agent execution</span></div>
+        </div>
+        <span id="loginEnvironment" class="login-environment"><i data-lucide="monitor-dot"></i>Local interactive demo</span>
+      </header>
+      <section class="login-layout">
+        <div class="login-story">
+          <p class="login-eyebrow">SECURITY LAB / INVOICE OPERATIONS</p>
+          <h1 id="loginTitle" tabindex="-1">See what an AI agent can do, and where its authority stops.</h1>
+          <p class="login-lede">Explore how NVIDIA NeMo agents investigate an invoice incident inside constrained OpenShell environments while people retain approval and trusted services verify every change.</p>
+          <div class="login-boundary-flow" aria-label="Governed execution sequence">
+            <div><span>01</span><i data-lucide="scan-search"></i><strong>Investigate</strong><small>Read evidence and propose a bounded response.</small></div>
+            <div><span>02</span><i data-lucide="shield-check"></i><strong>Constrain</strong><small>Filesystem and network policy limit every run.</small></div>
+            <div><span>03</span><i data-lucide="badge-check"></i><strong>Approve</strong><small>A separate person reviews the exact plan.</small></div>
+            <div><span>04</span><i data-lucide="file-check-2"></i><strong>Verify</strong><small>Independent evidence establishes the outcome.</small></div>
+          </div>
+          <div class="login-policy-preview" aria-label="Policy preview">
+            <div><span class="login-code-label">BOUNDARY PREVIEW</span><strong>Planning sandbox</strong></div>
+            <pre><code>filesystem  /app read-only  /tmp writable<br>network     allowlisted routes only<br>authority   proposal is not approval</code></pre>
+          </div>
+          <p id="loginEvidenceNote" class="login-evidence-note"><i data-lucide="info"></i><span>This local walkthrough uses deterministic receipts and clearly labels where no sandbox is created.</span></p>
+        </div>
+        <section class="login-access" aria-labelledby="loginAccessTitle">
+          <span class="login-access-icon" aria-hidden="true"><i data-lucide="fingerprint"></i></span>
+          <p class="login-eyebrow">ACCESS THE DEMO</p>
+          <h2 id="loginAccessTitle">Choose your role</h2>
+          <p id="loginAccessDescription">Use either local persona to experience the same incident from a different authority boundary.</p>
+          <div id="loginLocalChoices" class="login-role-choices">
+            <button id="loginOperatorButton" class="login-role-choice" type="button">
+              <span class="login-role-icon"><i data-lucide="terminal-square"></i></span>
+              <span><strong>Continue as Operator</strong><small>Investigate, propose, launch sandbox tests, and execute approved work.</small></span>
+              <i data-lucide="arrow-right"></i>
+            </button>
+            <button id="loginApproverButton" class="login-role-choice" type="button">
+              <span class="login-role-icon approver"><i data-lucide="file-check-2"></i></span>
+              <span><strong>Continue as Approver</strong><small>Review the exact proposal and approve or reject it independently.</small></span>
+              <i data-lucide="arrow-right"></i>
+            </button>
+          </div>
+          <button id="loginContinueButton" class="button button-primary login-continue" type="button" hidden><i data-lucide="log-in"></i>Continue with Microsoft</button>
+          <p id="loginAccessNote" class="login-access-note"><i data-lucide="lock-keyhole"></i><span>Local personas are isolated demo sessions. No password or cloud identity is required.</span></p>
+        </section>
+      </section>
+      <footer class="login-footer"><span>LearningNeMo / Security engineering lab</span><span>Evidence before claims.</span></footer>
+    </main>
+    <div class="app-shell" hidden>
       <header class="topbar">
         <div class="brand-lockup">
           <span class="brand-mark" aria-hidden="true"><i data-lucide="scan-line"></i></span>
@@ -85,7 +133,7 @@
             <div class="mission-boundary" aria-label="Execution boundaries">
               <div class="mission-human" data-mission-node="human"><i data-lucide="user-round-check"></i><span><strong>Human sponsor</strong><small>Entra identity</small></span></div>
               <div class="mission-transfer" aria-hidden="true"><i data-lucide="arrow-down"></i></div>
-              <div class="mission-saw" data-mission-node="saw"><div class="mission-saw-label"><i data-lucide="server"></i><strong>SAW</strong><span>Private Azure host</span></div>
+              <div class="mission-saw" data-mission-node="saw"><div class="mission-saw-label"><i data-lucide="server"></i><strong>Secure Azure Environment</strong><span>Private host for OpenShell</span></div>
                 <div class="mission-gateway" data-mission-node="gateway"><i data-lucide="shield-check"></i><strong>OpenShell</strong><span>mTLS / filesystem / process / network policy</span></div>
                 <div class="mission-processes"><div data-mission-node="planning"><i data-lucide="scan-search"></i><strong>Planning</strong><small>Diagnostic reads</small></div><div data-mission-node="execution"><i data-lucide="workflow"></i><strong>Execution</strong><small>Approved broker route</small></div><div data-mission-node="probe"><i data-lucide="shield-ban"></i><strong>Probe</strong><small>Forbidden requests</small></div></div>
               </div>
@@ -117,7 +165,7 @@
             <span class="pattern-handoff" aria-hidden="true"><i data-lucide="arrow-right"></i></span>
             <button id="boundary-agent" type="button" role="tab" aria-selected="false" aria-controls="patternBoundaryDetail" tabindex="-1" class="pattern-node pattern-pending"><span class="pattern-node-number">02 / ON WHOSE BEHALF</span><i data-lucide="bot"></i><strong>Agent identity</strong><span>Task-bound AgentRunner</span><small>Delegation integration pending</small></button>
             <span class="pattern-handoff" aria-hidden="true"><i data-lucide="arrow-right"></i></span>
-            <button id="boundary-workspace" type="button" role="tab" aria-selected="false" aria-controls="patternBoundaryDetail" tabindex="-1" class="pattern-node pattern-workspace"><span class="pattern-node-number">03 / WHERE &amp; HOW</span><i data-lucide="boxes"></i><strong>SAW + OpenShell</strong><span>Private host → constrained process</span><small>Planning · Execution · Probe</small></button>
+            <button id="boundary-workspace" type="button" role="tab" aria-selected="false" aria-controls="patternBoundaryDetail" tabindex="-1" class="pattern-node pattern-workspace"><span class="pattern-node-number">03 / WHERE &amp; HOW</span><i data-lucide="boxes"></i><strong>Secure Azure Environment + OpenShell</strong><span>Private host → OpenShell sandboxes</span><small>Planning · Execution · Probe</small></button>
             <span class="pattern-handoff" aria-hidden="true"><i data-lucide="arrow-right"></i></span>
             <button id="boundary-approval" type="button" role="tab" aria-selected="false" aria-controls="patternBoundaryDetail" tabindex="-1" class="pattern-node pattern-pending"><span class="pattern-node-number">04 / WHO AUTHORIZES</span><i data-lucide="file-check-2"></i><strong>Approval + broker</strong><span>Exact plan, bounded operation</span><small>Browser journey pending</small></button>
             <span class="pattern-handoff" aria-hidden="true"><i data-lucide="arrow-right"></i></span>
@@ -128,7 +176,7 @@
         </section>
 
         <section class="pattern-isolation" aria-labelledby="patternIsolationTitle">
-          <div class="pattern-isolation-copy"><p class="pattern-eyebrow">WHY BOTH SAW AND OPENSHELL?</p><h2 id="patternIsolationTitle">An identity is not<br>an isolation boundary.</h2><p>Authentication establishes the caller. It does not contain a script, restrict an outbound connection, or stop a process from reading a file.</p><dl><div><dt>SAW</dt><dd>The managed envelope around the website agent's private Azure VM: lifecycle, perimeter, trusted services, and audit.</dd></div><div><dt>OpenShell</dt><dd>The inner execution boundary: non-root MicroVM processes and narrow filesystem/network policies.</dd></div><div><dt>Guardrails</dt><dd>Inspect inputs before model/tool use. Content screening complements, but cannot replace, permissions and isolation.</dd></div></dl></div>
+          <div class="pattern-isolation-copy"><p class="pattern-eyebrow">WHY SECURE AZURE ENVIRONMENT AND OPENSHELL?</p><h2 id="patternIsolationTitle">An identity is not<br>an isolation boundary.</h2><p>Authentication establishes the caller. It does not contain a script, restrict an outbound connection, or stop a process from reading a file.</p><dl><div><dt>Secure Azure Environment</dt><dd>The outer engagement boundary: a private Azure host and a managed lifetime.</dd></div><div><dt>OpenShell</dt><dd>The sandbox runtime inside that environment: isolated non-root MicroVM processes and narrow filesystem/network policies.</dd></div><div><dt>Guardrails</dt><dd>Inspect inputs before model/tool use. Content screening complements, but cannot replace, permissions and isolation.</dd></div></dl></div>
           <div class="pattern-containment" aria-label="Configured workspace containment">
             <div class="pattern-enclosure"><div class="pattern-enclosure-title"><i data-lucide="server"></i><strong>Secure Agent Workspace</strong><span>Private workspace VM for the website agent</span></div><div class="pattern-policy-line"><i data-lucide="network"></i>OpenShell gateway <span>mTLS · policy enforcement</span></div><div class="pattern-processes"><div><i data-lucide="scan-search"></i><strong>Planning</strong><span>Read diagnostics</span><code>GET /diagnostics</code></div><div><i data-lucide="workflow"></i><strong>Execution</strong><span>Broker route only</span><code>POST /execute</code></div><div><i data-lucide="shield-check"></i><strong>Probe</strong><span>Test the boundary</span><code>No network allow</code></div></div><p>Configured route labels are abbreviated. Exact methods and paths are in the policy evidence.</p></div>
             <div class="pattern-outside"><i data-lucide="lock-keyhole"></i><span><strong>Outside the agent's authority</strong>Human approval, SQL credentials, Azure role grants, workspace lifecycle.</span></div>

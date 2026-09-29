@@ -65,7 +65,7 @@ def remote(kind, code, marker, *, revision=None, replica=None, read_only=False):
 
 def sql_code(kind):
     return f'''
-import os,httpx
+import os,time,httpx
 from task_agent.control.mssql_client import MssqlProcedureClient,managed_identity_connect
 from task_agent.control.invoice_catalog import GRANTS
 kind={kind!r}
@@ -74,7 +74,15 @@ health=httpx.get('http://127.0.0.1:8080/healthz')
 assert health.status_code==200
 if kind=='operator':assert health.json().get('demo_state')=='idle', 'release verification requires an idle demo'
 client=MssqlProcedureClient(server=os.environ['LEARNINGNEMO_SQL_SERVER'],database='learningnemo',client_id=os.environ['INVOICE_SIMULATOR_CLIENT_ID' if kind=='simulator' else 'AZURE_CLIENT_ID'],application_name='Invoice')
-with managed_identity_connect(client._connection_string,client._client_id,timeout_seconds=120,server=client._server) as connection:
+connection=None
+for attempt in range(3):
+    try:
+        connection=managed_identity_connect(client._connection_string,client._client_id,timeout_seconds=30,server=client._server)
+        break
+    except Exception:
+        if attempt==2:raise
+        time.sleep(10)
+with connection:
     with connection.cursor() as cursor:
         cursor.execute('SELECT CURRENT_USER');assert cursor.fetchone()[0]=='id-learningnemo-invoice-'+kind+'-dev'
         cursor.execute("SELECT OBJECT_SCHEMA_NAME(major_id)+'.'+OBJECT_NAME(major_id) FROM sys.database_permissions WHERE grantee_principal_id=DATABASE_PRINCIPAL_ID() AND permission_name='EXECUTE' AND state_desc='GRANT'")

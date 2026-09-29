@@ -17,6 +17,8 @@ param sqlServer string
 param modelOrigin string
 param guardrailOrigin string
 param subscriptionId string
+param guestBrokerClientId string
+param guestBrokerObjectId string
 param deployApps bool = false
 var kinds = ['operator', 'review', 'planning', 'execution', 'verifier']
 var tags = union({ project: 'learningnemo', owner: 'learningnemo-portfolio', purpose: 'invoice-agent-workflow' }, availabilityMode == 'operator-managed' ? { availabilityMode: availabilityMode, disposable: 'false' } : { disposable: 'true', expiresAt: expiresAt })
@@ -66,6 +68,8 @@ resource apps 'Microsoft.App/containerApps@2025-01-01' = [for (kind,index) in ki
           { name: 'INVOICE_AGENT_IMAGE', value: agentImage }
           { name: 'INVOICE_OPERATOR_OBJECT_ID', value: identities[0].properties.principalId }
           { name: 'INVOICE_VERIFIER_AUDIENCE', value: 'api://${apiClientId}' }
+          { name: 'INVOICE_GUEST_BROKER_CLIENT_ID', value: guestBrokerClientId }
+          { name: 'INVOICE_GUEST_BROKER_OBJECT_ID', value: guestBrokerObjectId }
           { name: 'OPENAI_BASE_URL', value: modelOrigin }
           { name: 'OPENAI_GUARDRAIL_BASE_URL', value: guardrailOrigin }
         ]

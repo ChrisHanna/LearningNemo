@@ -14,7 +14,7 @@
   }
 
   function workspaceBlocker(cloud) {
-    if (cloud.vm !== 'running') return 'The SAW VM is stopped. An Operator sign-in cannot start it. The workspace must be restored before this proof can run; retained disks have not been deleted.';
+    if (cloud.vm !== 'running') return 'The Secure Azure Environment host VM is stopped. An Operator sign-in cannot start it. The workspace must be restored before this proof can run; retained disks have not been deleted.';
     if (cloud.lease !== 'valid') return 'The workspace lease has expired or is too short. Renew the runtime lease before running the proof.';
     if (cloud.runtimeLock !== 'deployed') return 'The workspace network policy is not verified. Execution is blocked until its protections are restored.';
     if (!['absent', 'runtime-verified'].includes(cloud.nat)) return 'The outbound network configuration is not verified. Execution remains blocked.';

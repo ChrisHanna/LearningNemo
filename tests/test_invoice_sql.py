@@ -118,3 +118,32 @@ def test_doubled_windows_affect_only_new_proposals_and_new_independent_decisions
     for gate in ("State = 'submitted'",'ReviewExpiresAt > SYSUTCDATETIME()','PlanHash = @plan_hash','SponsorHash <> @reviewer_hash'):
         assert gate in decision
     assert 'lab.InvoiceScenarios' not in source and 'usp_claim_invoice_execution' not in source
+
+
+def test_invoice_migration_inventory_keeps_all_applied_sources():
+    import importlib.util
+    script = ROOT / 'scripts/apply-invoice-migrations.py'
+    spec = importlib.util.spec_from_file_location('invoice_migrations', script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    expected = tuple(path.name for path in sorted(SQL.parent.glob('0*_invoice_*.sql')))
+    assert module.INVOICE_MIGRATIONS == expected
+    assert len(expected) == 12
+    assert expected[-2:] == ('018_invoice_demo_lifecycle.sql', '019_invoice_public_demo.sql')
+
+
+def test_public_demo_quota_is_atomic_bounded_and_guest_only():
+    from sqlfluff.core import Linter
+    from task_agent.control.invoice_catalog import GRANTS
+    source = (SQL.parent / '019_invoice_public_demo.sql').read_text()
+    assert not Linter(dialect='tsql').parse_string(source).violations
+    admission = source.split('CREATE OR ALTER PROCEDURE control.usp_admit_invoice_guest_launch')[1].split('\nGO')[0]
+    assert 'WITH (UPDLOCK, HOLDLOCK)' in admission
+    assert 'DATEADD(hour, -1, @now)' in admission
+    assert 'IF @visitor >= 3 OR @global >= 25' in admission
+    assert "CASE WHEN @visitor >= 3 THEN 'hourly' ELSE 'daily' END" in admission
+    assert 'BEGIN TRANSACTION' in admission and 'ROLLBACK TRANSACTION' in admission
+    assert 'control.usp_admit_invoice_guest_launch' in GRANTS['jobs']
+    assert 'control.usp_review_guest_invoice_plans' in GRANTS['review']
+    assert 'control.usp_decide_guest_invoice_plan' in GRANTS['review']
+    assert 'control.usp_decide_guest_invoice_plan' not in GRANTS['incident']

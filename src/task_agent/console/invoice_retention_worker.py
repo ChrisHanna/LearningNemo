@@ -3,7 +3,7 @@
 import asyncio
 import base64
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import json
 from pathlib import Path
 import zlib
@@ -53,7 +53,7 @@ async def cleanup_pressure(runtime, client):
                 len(set(batch)) != len(batch) or deleted.intersection(batch) or before - remaining != len(batch)):
             raise RuntimeError('cleanup progress unconfirmed; no further deletion')
         deleted.update(batch)
-        if remaining < 14 or not batch:
+        if remaining <= 10 or not batch:
             return result
     return result
 
@@ -105,11 +105,14 @@ def retention_lifespan(runtime, client, controller, *, manager=None):
     async def lifespan(app):
         stopping = False
         async def monitor():
+            next_scheduled = datetime.min.replace(tzinfo=UTC)
             while not stopping:
                 manager.changed.clear()
                 state = manager.demo.status()['state']
                 final = manager.demo.claim_final_cleanup()
-                if (state == 'active' and not manager.demo.inflight or final) and not controller.lock.locked():
+                scheduled = datetime.now(UTC) >= next_scheduled
+                if (scheduled or state == 'active' or final) and not manager.demo.inflight and not controller.lock.locked():
+                    next_scheduled = datetime.now(UTC) + timedelta(hours=1)
                     try:
                         async with controller.lock:
                             controller.maintenance_active = True

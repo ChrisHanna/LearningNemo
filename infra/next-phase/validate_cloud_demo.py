@@ -9,9 +9,9 @@ def validate(template):
     modules = {item["name"]: item for item in template["resources"]}
     module = modules["learningnemo-cloud-demo-apps"]["properties"]["template"]
     services = module["variables"]["services"]
-    assert len(services) == 3
-    assert [item["external"] for item in services] == [True, False, False]
-    assert [item["port"] for item in services] == [8080, 8080, 8001]
+    assert len(services) == 4
+    assert [item["external"] for item in services] == [True, True, False, False]
+    assert [item["port"] for item in services] == [8080, 8080, 8080, 8001]
     apps = module["resources"][0]["properties"]
     assert apps["configuration"]["ingress"]["allowInsecure"] is False
     assert apps["configuration"]["secrets"] == []

@@ -31,7 +31,23 @@ def host_script(enabled, apply):
     return HOST_PREFIX+f'''
 import stat
 inventory=json.loads(cli('sandbox','list','--output','json'))
-assert all(item['phase']=='Stopped' for item in inventory), 'stop or reconcile active runs before maintenance'
+def sandbox_quiescent(item):
+    if item.get('phase')=='Stopped': return True
+    if item.get('phase')!='Error': return False
+    try:
+        identifier=str(uuid.UUID(item['id']))
+        sandbox_name=item['name']
+    except (KeyError,ValueError,TypeError): return False
+    runtime=pathlib.Path('/home/sawadmin/.local/state/openshell/vm/sandboxes')/identifier
+    if runtime.exists() or runtime.is_symlink(): return False
+    needles=(identifier.encode(),sandbox_name.encode())
+    for command in pathlib.Path('/proc').glob('[0-9]*/cmdline'):
+        try:
+            with command.open('rb') as source: content=source.read(65536)
+        except (FileNotFoundError,PermissionError,OSError): continue
+        if any(needle in content for needle in needles): return False
+    return True
+assert all(sandbox_quiescent(item) for item in inventory), 'stop active runs or inspect non-quiescent Error records before maintenance'
 directory=pathlib.Path('/etc/learningnemo')
 gate=directory/'invoice-availability.json'
 expected={{'mode':'operator-managed','admission_enabled':{enabled!r}}}

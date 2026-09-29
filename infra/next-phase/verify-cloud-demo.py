@@ -12,8 +12,19 @@ from availability_policy import managed
 
 
 def az(*args):
-    result = subprocess.run(['az', *args, '--output', 'json'], capture_output=True, text=True, check=True, timeout=90)
-    return json.loads(result.stdout)
+    for attempt in range(3):
+        try:
+            result = subprocess.run(['az', *args, '--output', 'json', '--only-show-errors'], capture_output=True, text=True, timeout=90)
+        except subprocess.TimeoutExpired as error:
+            text = (error.stderr or b'').decode(errors='replace') if isinstance(error.stderr, bytes) else error.stderr or ''
+            if attempt == 2 or any(marker in text.casefold() for marker in ('429','retry-after','too many requests')):
+                raise
+            continue
+        if result.returncode == 0:
+            return json.loads(result.stdout.lstrip('\ufeff'))
+        text=result.stderr.casefold()
+        if attempt == 2 or any(marker in text for marker in ('429','retry-after','too many requests')) or not any(marker in text for marker in ('network is unreachable','failed to establish a new connection','timed out')):
+            raise RuntimeError('read-only cloud verification failed: '+result.stderr[-1200:])
 
 
 def require(condition, message):
@@ -34,7 +45,12 @@ def main():
         require(not values['expiresAt'], 'Managed console must not have an expiry')
     else:
         require(dt.datetime.fromisoformat(values['expiresAt'].replace('Z', '+00:00')) > dt.datetime.now(dt.UTC), 'Cloud demo lease expired')
-    expected = {'dashboard': (True, values['consoleImage']), 'controller': (False, values['consoleImage']), 'agent': (False, values['agentImage'])}
+    expected = {
+        'dashboard': (True, values['consoleImage']),
+        'public-demo': (True, values['consoleImage']),
+        'controller': (False, values.get('controllerImage',values['consoleImage'])),
+        'agent': (False, values['agentImage']),
+    }
     records = {}
     for service, (external, image) in expected.items():
         name = f'ca-learningnemo-{service}-dev'
@@ -53,10 +69,19 @@ def main():
         require(set(key.lower() for key in app['identity']['userAssignedIdentities']) == {identity['id'].lower()}, f'{service} identity differs')
         grants = az('role', 'assignment', 'list', '--assignee-object-id', identity['principalId'], '--all')
         if service == 'dashboard':
-            require(len(grants) == 1 and grants[0]['roleDefinitionId'].endswith('7f951dda-4ed3-4680-a7ca-43fe172d538d'), 'Dashboard must have only AcrPull')
+            prefix=f'/subscriptions/{subscription}'
+            expected_grants={
+                (prefix+'/providers/Microsoft.Authorization/roleDefinitions/7f951dda-4ed3-4680-a7ca-43fe172d538d', prefix+'/resourcegroups/rg-learningnemo-artifacts-dev/providers/Microsoft.ContainerRegistry/registries/crlearningnemodevgruyrc4qwdvvm'),
+                (prefix+'/providers/Microsoft.Authorization/roleDefinitions/4633458b-17de-408a-b874-0445c86b69e6', prefix+'/resourceGroups/rg-nemo-agent-dev/providers/Microsoft.KeyVault/vaults/kvnemo8370187d/secrets/serviceops-demo-users'),
+                (prefix+'/providers/Microsoft.Authorization/roleDefinitions/4633458b-17de-408a-b874-0445c86b69e6', prefix+'/resourceGroups/rg-nemo-agent-dev/providers/Microsoft.KeyVault/vaults/kvnemo8370187d/secrets/serviceops-demo-signing-key'),
+            }
+            actual_grants={(grant['roleDefinitionId'],grant['scope']) for grant in grants}
+            require({(role.casefold(),scope.casefold()) for role,scope in actual_grants}=={(role.casefold(),scope.casefold()) for role,scope in expected_grants}, 'Dashboard permission inventory differs')
             environment = {item['name']:item.get('value') for item in properties['template']['containers'][0].get('env',[])}
             for kind in ('operator','review'):
                 require(environment.get('LEARNINGNEMO_INVOICE_'+kind.upper()+'_ORIGIN','') == values.get('invoice'+kind.title()+'Origin',''), 'Invoice private origin differs')
+            require(environment.get('LEARNINGNEMO_SERVICEOPS_OPERATOR_ORIGIN','').startswith('https://ca-nemo-serviceops-operator-dev.internal.'), 'ServiceOps operator origin absent')
+            require(environment.get('LEARNINGNEMO_SERVICEOPS_REVIEW_ORIGIN','').startswith('https://ca-nemo-serviceops-review-dev.internal.'), 'ServiceOps review origin absent')
         if service == 'agent':
             require(len(grants) == 2, 'Agent permission count differs')
             require(any(grant['scope'].endswith('/secrets/llm-gateway-client-key') for grant in grants), 'Agent secret scope differs')

@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 from task_agent.console.identity import AccessProfileError, validate_signed_in_user
 
-from task_agent.console.live_workspace import BASE_RULES, RULES, WorkspaceIdentityVerifier, WorkspaceLiveError, cloud_snapshot, parse_probe, probe_script
+from task_agent.console.live_workspace import BASE_RULES, OPTIONAL_RULES, RULES, WorkspaceIdentityVerifier, WorkspaceLiveError, cloud_snapshot, parse_probe, probe_script
 
 
 @pytest.mark.parametrize("invalid", ["inactive", "client", "age", "future", "subject", "reader", "scope", None])
@@ -75,7 +75,20 @@ def test_managed_workspace_requires_explicit_admission_and_owned_network():
     assert not cloud_snapshot(vm,stack,rules,subnet,nat)['readyForProbe']
 
 
-def test_snapshot_rejects_additional_rules():
+def test_snapshot_accepts_exact_optional_invoice_agents_rule():
+    inputs = snapshot_inputs()
+    name, values = next(iter(OPTIONAL_RULES.items()))
+    inputs[2].append({
+        "name": name, "priority": values[0], "access": values[1],
+        "destinationAddressPrefixes": list(values[2]), "destinationPortRange": values[3],
+        "protocol": values[4], "direction": "Outbound", "sourceAddressPrefix": "*", "sourcePortRange": "*",
+    })
+    assert cloud_snapshot(*inputs)["readyForProbe"]
+    inputs[2][-1]["destinationAddressPrefixes"].append("203.0.113.1/32")
+    assert not cloud_snapshot(*inputs)["readyForProbe"]
+
+
+def test_snapshot_rejects_unknown_additional_rules():
     inputs = snapshot_inputs()
     inputs[2].append({"name": "allow-extra"})
     assert not cloud_snapshot(*inputs)["readyForProbe"]

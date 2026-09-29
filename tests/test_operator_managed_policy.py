@@ -26,7 +26,9 @@ def test_host_transition_is_non_destructive_and_keeps_run_timers(monkeypatch):
     compile(source,'<host-policy>','exec')
     assert "['systemctl','disable','--now','learningnemo-saw-expire.timer']" in source
     assert 'invoice-expire-' not in source and "cli('sandbox','stop'" not in source
-    assert 'delete' not in source and "item['phase']=='Stopped'" in source
+    assert 'delete' not in source and "item.get('phase')=='Stopped'" in source
+    assert "item.get('phase')!='Error'" in source and 'runtime.exists() or runtime.is_symlink()' in source
+    assert "glob('[0-9]*/cmdline')" in source and 'any(needle in content for needle in needles)' in source
     assert "'admission_enabled':True" in source
     assert "'admission_enabled':False" in host_script(False,True)
 

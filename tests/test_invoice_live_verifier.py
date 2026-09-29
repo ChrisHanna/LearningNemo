@@ -11,7 +11,10 @@ def test_invoice_live_verifier_commands_compile_and_are_bounded(monkeypatch):
         compile(code,'<invoice-verifier>','exec')
         assert len(base64.b64encode(zlib.compress(code.encode())))<1700
         assert 'lab.usp_apply_invoice_operation' in code
-        assert 'timeout_seconds=120' in code
+        assert 'for attempt in range(3):' in code
+        assert 'timeout_seconds=30' in code and 'time.sleep(10)' in code
+        assert code.index('connection=managed_identity_connect') < code.index('with connection.cursor()')
+        assert code.count("cursor.execute('SELECT CURRENT_USER')") == 1
     code = workload_code()
     compile(code,'<invoice-workload-verifier>','exec')
     assert len(base64.b64encode(zlib.compress(code.encode()))) < 1700

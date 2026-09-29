@@ -1,6 +1,9 @@
 # Governed Invoice Incident Demo
 
-Live console:
+Public guest console:
+https://learningnemo.ai/
+
+Entra-protected operator console:
 https://ca-learningnemo-dashboard-dev.jollybeach-503c7ed1.eastus.azurecontainerapps.io/
 
 The first screen is the invoice workflow. Planning and Execution are real NeMo
@@ -14,6 +17,109 @@ Guardrails and APIM; the SQL broker, not model text, enforces approved mutations
 > The deployment and evidence recorded below predate this change; it takes
 > effect only after the invoice services and agent image are rebuilt and
 > redeployed.
+
+## Public Guest Demo
+
+`learningnemo.ai` is a separate Azure Container App for demonstrations without
+Microsoft Entra sign-in. Each browser can choose an opaque guest Operator or
+Approver identity. Guest Operators may launch Planning investigations and submit
+plans for independent review. Guest Approvers may review only guest-created
+submitted plans, and the existing self-review restriction prevents the plan
+sponsor from approving their own plan. Execution, demo Start/End controls,
+sandbox deletion, sandbox challenges, reconciliation, and plan completion remain
+unavailable to guests. Use the Entra-protected console for those operations.
+
+Public Planning admission is enforced atomically in Azure SQL: no more than
+three launches per guest in a rolling hour and no more than 25 public launches
+in a UTC day. Clearing browser state cannot bypass the global daily limit.
+Each launch may be a Planning agent run or one of the eight bounded Planning
+sandbox investigations: draft a query without executing it, read an allowed
+file, attempt a protected-file read, attempt direct SQL, attempt an `/app`
+write, call the approved Planning API, call an unapproved external API, or
+attempt a symlink escape. Execution-policy probes, same-sandbox follow-up
+tests, inventory/deletion controls, and Execution agents remain protected.
+The public Container App uses a dedicated managed identity with only the
+`Invoice.GuestBroker` application role; that identity has no execution
+authority.
+
+The apex domain is configured at Namecheap with:
+
+- `A @` to `52.149.253.66`
+- `TXT asuid` to
+  `1DE51958314C876A214D189D80B946D0D5D2116287E989F87C1E1E9E032236AD`
+- `TXT _dnsauth` to `_ucizsludzx2at240fg9by95osuh4k3p`
+
+Azure Container Apps binds `learningnemo.ai` with the managed certificate
+`learningnemo-ai-managed` and SNI. Retain both TXT records. In particular,
+removing `_dnsauth` can prevent managed-certificate renewal. `www.learningnemo.ai`
+is not configured.
+
+## OpenShell Sandbox Tests
+
+The OpenShell sandbox tests tab runs eight bounded, deterministic scenarios: draft a
+read-only SQL query without executing it, read an allowed packaged config file,
+attempt to read a known protected file, attempt a direct Azure SQL connection,
+attempt to modify the read-only `/app` tree, call the exact allowlisted Planning
+API route, call an unapproved external API, and attempt to follow a symlink from
+writable `/tmp` to a protected file outside the allowlist. The approved route is invoked
+without credentials, so an HTTP 401 proves reachability without granting data
+access. The harness records only bounded metadata such as hashes, byte counts,
+destinations, HTTP status and policy outcomes; it does not expose protected file
+contents or database credentials.
+
+The local demo returns receipts marked `evidence_mode: fixture` and explicitly
+does not claim live OpenShell enforcement. A deployed result is confirmed only
+from a bound `evidence_mode: live` receipt with the expected sandbox identity,
+policy hash, non-root UID, cleanup state and enforcing-layer evidence. Network
+timeouts, DNS errors, connection refusals and SQL authentication failures do not
+prove a policy denial. These scenarios currently use a deterministic harness and
+record `model_involved: false`; they do not claim that a model chose the action.
+
+Each deployed investigation creates a fresh Planning-policy OpenShell MicroVM and
+dispatches its registered worker through `openshell sandbox exec` using
+`/opt/venv/bin/python`. The console shows the persisted lifecycle rather than
+inferring execution from the final result: sandbox preparation, sandbox and
+policy binding, in-sandbox process start, bound receipt capture, and confirmed
+stop with retained evidence. The execution panel exposes the run ID, sandbox ID,
+policy hash, UID, runtime, executor, and final state. A missing or mismatched
+field keeps the result unconfirmed. Local fixtures instead state
+`sandbox_created: false` and never receive the live execution label.
+
+Published September 24, 2026. All five private invoice services are on ready
+revision `0000035`; live verification passed exact managed-identity SQL grants,
+workload identity, and private connectivity. The public dashboard runs the
+ServiceOps-preserving `invoiceproof` revision, built as a three-asset overlay on
+the prior immutable console digest. Independent cloud verification passed the
+dashboard/controller/agent image pins, exact AcrPull plus two secret-scoped
+ServiceOps grants, private ServiceOps and invoice origins, HTTPS headers, and
+anonymous API denial. Public desktop and 390px mobile checks have no horizontal
+overflow. The execution panel and lifecycle assets are live.
+
+No authenticated investigation was launched during publication. The remaining
+acceptance step requires a human Operator session: sign in, start the explicit
+demo window, open OpenShell sandbox tests, choose a scenario, and launch one OpenShell
+sandbox. The resulting receipt must show the run ID, sandbox ID, UID, policy
+hash, `/opt/venv/bin/python`, `executed_in_sandbox: true`, and a confirmed
+stopped-and-retained final state. Do not infer that acceptance result from image
+or service verification alone.
+
+The non-human runtime acceptance gate subsequently passed with run
+`905c46f8acb7484eb27bf52b818076a8` and retained sandbox
+`d7443a8cf1cf42c6bbda33cbf7ceb6a3`. OpenShell independently reports the sandbox
+as `Stopped` under policy revision 1. Durable SQL records the exact lifecycle
+`preparing-sandbox -> sandbox-bound -> investigation-started ->
+investigation-recorded -> sandbox-stopped`, UID 998, executor
+`/opt/venv/bin/python`, `executed_in_sandbox: true`, and
+`query_executed: false`. This was explicitly labelled `humanRehearsal: false`
+and `modelInvolved: false`; it proves real sandbox execution, not a human or
+model-led investigation.
+
+The first creation attempt exposed an incomplete 5.34 GiB image staging cache
+and only 0.11 GiB free space. No sandbox was deleted. A guarded reclamation
+removed only that failed staging directory, its empty final placeholder, and
+one prepared-image cache proven unreferenced by every retained sandbox; sandbox
+inventory remained unchanged and free space increased to 16.47 GiB. Both failed
+run records remain retained as quiescent `Error` evidence.
 
 ## Explicit Demo Sessions
 
@@ -158,12 +264,12 @@ verified completed run may be deleted manually. SQL plans and receipts remain.
 Audience and Approver views do not expose deletion controls. A pending deletion
 is saved before POST and never automatically retried after a lost response.
 
-Version 2 of the root-owned retention policy starts pressure cleanup at 14
-retained sandboxes and targets 13. It selects the oldest eligible stopped runs
-first, independently of the 24-hour TTL, with at most two deletions per pass.
-The existing TTL still applies below the pressure threshold. The monitor wakes
-immediately after a job's final result is persisted, checks every minute while
-idle, and checks before Planning, Execution, and standalone challenge creation.
+Version 3 of the root-owned retention policy starts pressure cleanup at 11
+retained sandboxes and targets 10. It selects the oldest eligible stopped
+sandboxes first, with at most two deletions per pass. The 24-hour TTL applies to
+the host-evidence recovery tier. The monitor checks at startup and hourly,
+wakes immediately after a job's final result is persisted, and checks before
+Planning, Execution, and standalone challenge creation.
 It drains up to six confirmed two-deletion batches in one cycle, stopping at the
 target, no progress, or an uncertain result. Admission waits for monitor-held
 maintenance rather than treating it as another agent run. Inventory GETs never
@@ -485,7 +591,8 @@ Azure VMs, disks, database records, services, original workspace sandboxes,
 failed/uncertain runs, and unbound legacy sandboxes remain retained. The limit
 stays at 24 sandboxes; one active sandbox and the 4 GiB free-space floor remain.
 
-The managed Operator service checks hourly, including on startup. The SQL read
+The managed Operator service checks hourly, including on startup, even when no
+human demo session is active. The SQL read
 procedure `control.usp_read_invoice_retention` returns only old finished jobs
 with revoked authority and a matching controller stop event. Planning needs a
 valid bound diagnostic result; Execution also needs independent verification and
@@ -506,13 +613,18 @@ active sandbox blocks a cleanup pass. Each pass deletes at most two eligible
 sandboxes and verifies that every other sandbox is preserved. A persisted delete
 attempt prevents blind replay after a timeout or an uncertain result; manual
 inspection is required in that case. Missing evidence or archive failures retain
-the sandbox. Old stopped sandboxes without proof of success are not inferred safe.
+the sandbox. Stopped invoice sandboxes without current SQL-bound success evidence enter a
+separate recovery tier only after 24 hours. The host archives their OpenShell
+record, effective policy, console/network logs, image identity, and stop marker
+before deletion. This covers public fixed-test sandboxes and stopped leftovers
+from older deployments without requiring a guest to complete approval. Active
+or non-invoice sandboxes remain ineligible.
 
 Deletion is separately gated by root-owned
 `/etc/learningnemo/invoice-retention.json` with the exact policy:
 
 ```json
-{"version":1,"enabled":true,"successful_stopped_ttl_hours":24}
+{"version":3,"enabled":true,"successful_stopped_ttl_hours":24,"stopped_sandbox_ttl_hours":24,"cleanup_at_count":11,"target_count":10}
 ```
 
 The guarded `infra/next-phase/configure_invoice_retention.py` commands are:
@@ -555,7 +667,7 @@ account, mode, plan, stage, scenario, selected challenge, or job state clears it
 a request consumes it. No refresh or navigation automatically submits an action.
 
 The five-step screen now includes a selectable architecture: human identity,
-harness, SAW workspace, OpenShell sandbox, Planning/Execution agents, mediated
+harness, Secure Azure Environment, OpenShell sandbox, Planning/Execution agents, mediated
 model, diagnostic gateway, SQL broker, and independent verifier. Select a
 component to inspect Authority, Boundaries, or Evidence.
 
@@ -815,7 +927,7 @@ regressions and isolated browser delayed-success/failure checks with no real wri
 
 The invoice application remains available until explicit operator intervention.
 Application uptime is no longer tied to agent authority lifetimes. Active invoice
-dependencies, the public console, and the SAW host are tagged
+dependencies, the public console, and the Secure Azure Environment host are tagged
 `availabilityMode=operator-managed` and have no `expiresAt` tag. Invoice services
 use `INVOICE_AVAILABILITY_MODE=operator-managed` with no service deadline. The
 legacy global `learningnemo-saw-expire.timer` is disabled, not repurposed as a

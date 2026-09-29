@@ -54,3 +54,21 @@ def test_cache_verifier_is_read_only():
     assert '--unix-socket "$socket"' in source
     for command in ('sandbox create', 'sandbox delete', 'podman pull', 'systemctl restart', 'chmod ', 'chown '):
         assert command not in source
+
+
+def test_openshell_cache_reclamation_is_exact_and_preserves_sandboxes():
+    import subprocess
+    root = Path(__file__).resolve().parents[1]
+    script = root / 'scripts/reclaim-openshell-image-cache.sh'
+    subprocess.run(['bash', '-n', str(script)], check=True)
+    source = script.read_text()
+    assert 'reclaim-unreferenced-openshell-cache' in source
+    assert "failed[0].get('phase') != 'Error'" in source
+    assert "runtime.exists() or runtime.is_symlink()" in source
+    assert "(sandboxes / str(uuid.UUID(failed[0]['id']))).exists()" in source
+    assert 'referenced_caches()' in source and "if failed_final.name in references or unreferenced.name in references" in source
+    assert "if busy(target)" in source
+    assert source.index("os.fsync(output.fileno())") < source.index("shutil.rmtree(target)")
+    assert "sandbox inventory changed during cache reclamation" in source
+    assert "free_after < 12 * 1024**3" in source
+    assert "cli('sandbox', 'delete'" not in source and 'openshell sandbox delete' not in source

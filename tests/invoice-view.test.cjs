@@ -215,9 +215,45 @@ test('trace requires bound run and exact independent receipt, never temporal inf
 });
 
 test('challenge verdict requires control, denial, identity and cleanup evidence', () => {
-  const result={kind:'planning',challenge_id:'run',state:'finished',result:{run_id:'run',outcome:'denied',actor:'controlled-probe',agent_requested:false,database_capability_issued:false,sandbox_stopped:true,uid:998,requests:[{tool:'invoice_summary',status:401},{tool:'execute_step',status:403}],denial_evidence:['OCSF HTTP:POST DENIED execute_step']}};
+  const result={kind:'planning',challenge_id:'run',state:'finished',result:{run_id:'run',outcome:'denied',evidence_mode:'live',actor:'controlled-probe',agent_requested:false,database_capability_issued:false,executed_in_sandbox:true,sandbox_runtime:'OpenShell MicroVM',sandbox_executor:'/opt/venv/bin/python',sandbox_stopped:true,sandbox_retained:true,uid:998,requests:[{tool:'invoice_summary',status:401},{tool:'execute_step',status:403}],denial_evidence:['OCSF HTTP:POST DENIED execute_step']}};
   assert.equal(view.challengeProof(result).confirmed,true);
-  for(const changed of [{sandbox_stopped:false},{run_id:'other'},{denial_evidence:[]},{uid:0},{requests:[{tool:'invoice_summary',status:0},{tool:'execute_step',status:403}]}]) assert.equal(view.challengeProof({...result,result:{...result.result,...changed}}).confirmed,false);
+  for(const changed of [{executed_in_sandbox:false},{sandbox_runtime:'unknown'},{sandbox_executor:'/bin/false'},{sandbox_stopped:false},{sandbox_retained:false},{run_id:'other'},{denial_evidence:[]},{uid:0},{requests:[{tool:'invoice_summary',status:0},{tool:'execute_step',status:403}]}]) assert.equal(view.challengeProof({...result,result:{...result.result,...changed}}).confirmed,false);
+});
+
+test('sandbox investigation receipts distinguish local fixtures, live evidence and unsafe outcomes', () => {
+  const fixtureBase={run_id:'run',evidence_mode:'fixture',actor:'deterministic-fixture',agent_requested:false,model_involved:false,sandbox_created:false};
+  const liveBase={run_id:'run',sandbox_id:'b'.repeat(32),uid:998,evidence_mode:'live',policy_hash:'c'.repeat(64),actor:'sandbox-investigation',agent_requested:false,model_involved:false,executed_in_sandbox:true,sandbox_runtime:'OpenShell MicroVM',sandbox_executor:'/opt/venv/bin/python',sandbox_stopped:true,sandbox_retained:true};
+  const cases={
+    'query-draft':{outcome:'allowed',operation:'generate-read-query',path:'/tmp/investigation.sql',query_class:'SELECT',statement_hash:'d'.repeat(64),query_executed:false},
+    'allowed-file':{outcome:'allowed',operation:'read-file',path:'/app/configs/invoice-planning.yml',content_hash:'d'.repeat(64)},
+    'denied-file':{outcome:'policy-denied',operation:'read-file',path:'/boundary/private-investigation.txt',error_category:'filesystem-policy-denied'},
+    'sql-denied':{outcome:'policy-denied',operation:'connect-sql',destination:'sql-learningnemo-dev.database.windows.net',destination_port:1433,error_category:'network-policy-denied',database_capability_issued:false},
+    'write-app-denied':{outcome:'policy-denied',operation:'write-file',path:'/app/investigation-write-attempt.txt',error_category:'filesystem-policy-denied'},
+    'approved-api':{outcome:'allowed',operation:'call-planning-api',destination_port:443,method:'POST',route:'/v2/invoice/tools/invoice_summary',http_status:401,credential_issued:false},
+    'external-api-denied':{outcome:'policy-denied',operation:'call-external-api',destination:'example.com',destination_port:443,error_category:'network-policy-denied',credential_issued:false},
+    'symlink-escape-denied':{outcome:'policy-denied',operation:'follow-symlink',path:'/tmp/private-investigation-link',target:'/boundary/private-investigation.txt',link_created:true,link_removed:true,error_category:'filesystem-policy-denied'},
+  };
+  for(const [kind,receipt] of Object.entries(cases)){
+    const result={kind,challenge_id:'run',state:'finished',result:{...fixtureBase,scenario:kind,...receipt}};
+    const fixture=view.challengeProof(result);assert.equal(fixture.fixture,true);assert.equal(fixture.confirmed,false);assert.equal(fixture.successful,true);
+    const denial=['sql-denied','external-api-denied'].includes(kind)?['OCSF CONNECT DENIED '+receipt.destination+' '+receipt.destination_port]:[];
+    const live=view.challengeProof({...result,result:{...liveBase,scenario:kind,...receipt,denial_evidence:denial}});
+    assert.equal(live.confirmed,true);
+  }
+  const unsafe={kind:'query-draft',challenge_id:'run',state:'finished',result:{...fixtureBase,scenario:'query-draft',...cases['query-draft'],query_executed:true}};
+  assert.equal(view.challengeProof(unsafe).successful,false);
+  const timeout={kind:'sql-denied',challenge_id:'run',state:'finished',result:{...fixtureBase,scenario:'sql-denied',...cases['sql-denied'],outcome:'unconfirmed',error_category:'network-timeout'}};
+  assert.equal(view.challengeProof(timeout).successful,false);
+  const unexpectedStatus={kind:'approved-api',challenge_id:'run',state:'finished',result:{...fixtureBase,scenario:'approved-api',...cases['approved-api'],http_status:200}};
+  assert.equal(view.challengeProof(unexpectedStatus).successful,false);
+  const externalWithoutDenial={kind:'external-api-denied',challenge_id:'run',state:'finished',result:{...liveBase,scenario:'external-api-denied',...cases['external-api-denied'],denial_evidence:[]}};
+  assert.equal(view.challengeProof(externalWithoutDenial).successful,false);
+  const externalWithUnrelatedDenial={...externalWithoutDenial,result:{...externalWithoutDenial.result,denial_evidence:['OCSF CONNECT DENIED unrelated.example 443']}};
+  assert.equal(view.challengeProof(externalWithUnrelatedDenial).successful,false);
+  const externalWithMalformedDenial={...externalWithoutDenial,result:{...externalWithoutDenial.result,denial_evidence:[null]}};
+  assert.equal(view.challengeProof(externalWithMalformedDenial).successful,false);
+  const symlinkLeftBehind={kind:'symlink-escape-denied',challenge_id:'run',state:'finished',result:{...fixtureBase,scenario:'symlink-escape-denied',...cases['symlink-escape-denied'],link_removed:false}};
+  assert.equal(view.challengeProof(symlinkLeftBehind).successful,false);
 });
 
 test('new ninety-minute review deadlines do not revive existing thirty-minute plans', () => {
@@ -229,4 +265,15 @@ test('new ninety-minute review deadlines do not revive existing thirty-minute pl
   assert.equal(view.reviewStatus(newPlan, created+90*60000).allowed, false);
   assert.equal(view.submissionStatus({ ...newPlan, state: 'draft' }, created+89*60000).allowed, true);
   assert.equal(view.submissionStatus({ ...oldPlan, state: 'draft' }, created+45*60000).allowed, false);
+});
+
+test('Agents API lifecycle remains distinct from sandbox and harness claims', () => {
+  const connected=view.eventView({source:'openai-agents-api',event_type:'agent.session.environment.connected'});
+  assert.equal(connected.title,'OpenShell executor connected to Agents API');
+  assert.equal(connected.component,'sandbox');
+  assert.equal(connected.source,'Agents API observation');
+  const failed=view.eventView({source:'openai-agents-api',event_type:'agent.session.turn.failed'});
+  assert.equal(failed.tone,'warning');
+  assert.equal(view.observation({kind:'planning',state:'rejected'},[],true,Date.now()).state,'rejected');
+  assert.equal(view.blocksNewWork({state:'rejected'}),false);
 });

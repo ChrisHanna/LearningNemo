@@ -3,11 +3,20 @@
 from datetime import UTC, datetime
 
 
+AVAILABILITY_MODES = frozenset({'leased', 'operator-managed'})
+
+
+def validate_availability_mode(mode):
+    if mode not in AVAILABILITY_MODES:
+        raise ValueError('explicit invoice availability mode required')
+
+
 def validate_availability(mode, expires_at):
+    validate_availability_mode(mode)
     if mode == 'operator-managed':
         if expires_at is not None:
             raise ValueError('operator-managed availability has no service deadline')
-    elif mode != 'leased' or expires_at is None or expires_at.tzinfo is None:
+    elif expires_at is None or expires_at.tzinfo is None:
         raise ValueError('explicit availability mode and aware leased deadline required')
 
 

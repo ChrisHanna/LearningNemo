@@ -5,7 +5,7 @@ const view = require('../src/task_agent/console/static/invoice-view.js');
 const run = 'a'.repeat(32), sandbox = 'b'.repeat(32), policy = 'c'.repeat(64);
 const job = {job_id:run,kind:'planning',state:'running',sandbox_test_closed:false,sandbox_test_requested:false};
 const events = [{source:'workspace-controller',event_type:'sandbox-bound',kind:'planning',sandbox_id:sandbox,policy_hash:policy}];
-const proof = {scope:'same-agent-sandbox',kind:'planning',run_id:run,sandbox_id:sandbox,policy_hash:policy,outcome:'denied',enforced_by:'OpenShell',actor:'controlled-probe',agent_requested:false,agent_authority_revoked:true,probe_capability_issued:false,sandbox_stopped:true,uid:998,requests:[{tool:'invoice_summary',status:401},{tool:'execute_step',status:403}],denial_evidence:['OCSF DENIED execute_step']};
+const proof = {scope:'same-agent-sandbox',kind:'planning',run_id:run,sandbox_id:sandbox,policy_hash:policy,outcome:'denied',enforced_by:'OpenShell',actor:'controlled-probe',agent_requested:false,agent_authority_revoked:true,probe_capability_issued:false,executed_in_sandbox:true,sandbox_runtime:'OpenShell MicroVM',sandbox_executor:'/opt/venv/bin/python',sandbox_stopped:true,sandbox_retained:true,uid:998,requests:[{tool:'invoice_summary',status:401},{tool:'execute_step',status:403}],denial_evidence:['OCSF DENIED execute_step']};
 
 test('only a bound active agent run has a same-sandbox test action', () => {
   assert.equal(view.sandboxTest(job,events).available,true);
@@ -18,7 +18,7 @@ test('only a bound active agent run has a same-sandbox test action', () => {
 test('same-sandbox proof requires exact binding and actual enforcing-layer evidence', () => {
   assert.equal(view.sandboxTest({...job,state:'finished',sandbox_test:proof},events).confirmed,true);
   for(const changed of [{sandbox_id:'f'.repeat(32)},{run_id:'other'},{kind:'execution'},{policy_hash:'f'.repeat(64)},
-    {agent_authority_revoked:false},{probe_capability_issued:true},{sandbox_stopped:false},{denial_evidence:[]},{uid:0},
+    {agent_authority_revoked:false},{probe_capability_issued:true},{executed_in_sandbox:false},{sandbox_runtime:'unknown'},{sandbox_executor:'/bin/false'},{sandbox_stopped:false},{sandbox_retained:false},{denial_evidence:[]},{uid:0},
     {requests:[{tool:'invoice_summary',status:401},{tool:'execute_step',status:0}]}]) {
     assert.equal(view.sandboxTest({...job,sandbox_test:{...proof,...changed}},events).confirmed,false);
   }

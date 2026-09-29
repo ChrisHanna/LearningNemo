@@ -160,7 +160,10 @@
     }
     find("sessionRoleName").textContent = signedIn ? personaLabel(session.persona) : statusLabel(session?.status || "signed_out");
     find("sessionAccountProof").textContent = signedIn ? `Account ${session.accountFingerprint}` : "No role selected";
-    find("sessionSwitch").querySelector("span").textContent = session?.authMode === "local-demo" ? "Change role" : "Switch account";
+    find("sessionSwitch").querySelector("span").textContent = ["local-demo", "public-demo"].includes(session?.authMode) ? "Change role" : "Switch account";
+    find("localOperatorButton").querySelector("small").textContent = session?.authMode === "public-demo"
+      ? "Analyze, propose, and submit for review"
+      : "Analyze, propose, and execute";
     find("sessionTitle").textContent = role?.title || "Choose an assigned account to begin";
     find("sessionPurpose").textContent = role?.purpose || "Reader tests denied changes. Operator tests permitted changes. Approver review is not connected yet.";
     find("sessionCan").textContent = role?.can || "Sign-in and architecture review.";
@@ -186,7 +189,7 @@
   find("sessionSignOut").addEventListener("click", () => clearAuthentication().catch(error => toast(error.message, "error")));
   find("sessionSwitch").addEventListener("click", async () => {
     if (switching || operations.size || state.scenarioRunning) return;
-    if (state.session?.authMode === "local-demo") {
+    if (["local-demo", "public-demo"].includes(state.session?.authMode)) {
       updateAuthDialog(state.session);
       if (!elements.authDialog.open) elements.authDialog.showModal();
       return;

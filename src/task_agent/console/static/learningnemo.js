@@ -3,6 +3,7 @@ const state = {
   agentUrl: "",
   hosting: "local",
   reviewEnabled: false,
+  invoiceInvestigationMode: null,
   session: null,
   system: null,
   plan: null,
@@ -16,6 +17,17 @@ const state = {
 };
 
 const elements = {
+  appShell: document.querySelector(".app-shell"),
+  loginExperience: document.querySelector("#loginExperience"),
+  loginTitle: document.querySelector("#loginTitle"),
+  loginEnvironment: document.querySelector("#loginEnvironment"),
+  loginEvidenceNote: document.querySelector("#loginEvidenceNote span"),
+  loginAccessDescription: document.querySelector("#loginAccessDescription"),
+  loginLocalChoices: document.querySelector("#loginLocalChoices"),
+  loginOperatorButton: document.querySelector("#loginOperatorButton"),
+  loginApproverButton: document.querySelector("#loginApproverButton"),
+  loginContinueButton: document.querySelector("#loginContinueButton"),
+  loginAccessNote: document.querySelector("#loginAccessNote span"),
   agentStatusDot: document.querySelector("#agentStatusDot"),
   agentStatusLabel: document.querySelector("#agentStatusLabel"),
   agentEndpoint: document.querySelector("#agentEndpoint"),
@@ -184,12 +196,46 @@ function renderAgent() {
 }
 
 let sessionViewportKey = null;
+let loginVisible = true;
+function renderLoginExperience(session) {
+  const authenticated = session.status === "authenticated";
+  const local = ["local-demo", "public-demo"].includes(session.authMode);
+  elements.loginExperience.hidden = authenticated;
+  elements.appShell.hidden = !authenticated;
+  elements.loginLocalChoices.hidden = !local;
+  elements.loginContinueButton.hidden = local;
+  const environmentLabel = document.createElement("span");
+  environmentLabel.textContent = session.authMode === "public-demo"
+    ? "Public Azure demo"
+    : state.hosting === "azure" ? "Deployed security lab" : "Local interactive demo";
+  elements.loginEnvironment.replaceChildren(createIcon(state.hosting === "azure" ? "cloud" : "monitor-dot"), environmentLabel);
+  elements.loginAccessDescription.textContent = local
+    ? session.authMode === "public-demo"
+      ? "Choose a guest role. Planning and independent review use live Azure sandboxes; execution remains protected."
+      : "Use either local persona to experience the same incident from a different authority boundary."
+    : "Sign in with your assigned Microsoft account. Verified application roles determine which actions are available.";
+  elements.loginOperatorButton.querySelector("small").textContent = session.authMode === "public-demo"
+    ? "Investigate, propose, launch planning sandboxes, and submit work for independent review."
+    : "Investigate, propose, launch sandbox tests, and execute approved work.";
+  elements.loginAccessNote.textContent = local
+    ? session.authMode === "public-demo"
+      ? "No Microsoft sign-in is required. Launches are limited to 3 per guest each hour and 25 total per UTC day."
+      : "Local personas are isolated demo sessions. No password or cloud identity is required."
+    : "LearningNeMo reads verified scopes and application roles. It never asks this page for your password.";
+  elements.loginEvidenceNote.textContent = state.invoiceInvestigationMode === "openshell"
+    ? "Deployed investigations launch retained OpenShell MicroVMs and bind results to enforcement evidence."
+    : "This local walkthrough uses deterministic receipts and clearly labels where no sandbox is created.";
+  if (!authenticated && !loginVisible) requestAnimationFrame(() => elements.loginTitle.focus({ preventScroll: true }));
+  loginVisible = !authenticated;
+}
+
 function renderSession() {
   const session = state.session || { status: "signed_out", grantedScopes: [], grantedRoles: [] };
   const nextViewportKey = JSON.stringify([state.invoiceEnabled, session.status, session.persona, session.storageKey || session.accountFingerprint]);
   const viewport = state.invoiceEnabled && sessionViewportKey === nextViewportKey ? { left: window.scrollX, top: window.scrollY } : null;
   sessionViewportKey = nextViewportKey;
   const authenticated = session.status === "authenticated";
+  renderLoginExperience(session);
   const approver = authenticated && session.persona === "approver";
   const label = authenticated ? personaLabel(session.persona) : "Not signed in";
   const dot = elements.currentUserStatus.querySelector(".status-dot");
@@ -236,6 +282,7 @@ async function bootstrap() {
     state.hosting = payload.hosting || "local";
     state.reviewEnabled = payload.reviewEnabled === true;
     state.invoiceEnabled = payload.invoiceEnabled === true;
+    state.invoiceInvestigationMode = payload.invoiceInvestigationMode || null;
     state.session = payload.session;
     state.csrfToken = payload.csrfToken;
     renderAgent();
@@ -395,8 +442,8 @@ function renderIdentityStatus() {
 }
 
 function updateAuthDialog(session) {
-  const local = session.authMode === "local-demo";
-  document.querySelector("#authDialog .eyebrow").textContent = local ? "LOCAL DEMO ACCOUNTS" : "Microsoft Entra ID";
+  const local = ["local-demo", "public-demo"].includes(session.authMode);
+  document.querySelector("#authDialog .eyebrow").textContent = session.authMode === "public-demo" ? "PUBLIC AZURE DEMO" : local ? "LOCAL DEMO ACCOUNTS" : "Microsoft Entra ID";
   elements.authDialog.querySelector("h1").textContent = local && state.session?.status === "authenticated" ? "Change demo role" : local ? "Choose a demo role" : "Sign in to LearningNeMo";
   document.querySelector("#authRoleHint").textContent = local
     ? "Choose the role needed for the next step. Your investigation remains available."
@@ -438,7 +485,7 @@ async function authenticate(reviewAccess = false) {
   state.session = current;
   renderSession();
   if (current.status === "authenticated" && (!reviewAccess || current.grantedScopes?.includes("plans.review"))) return current;
-  if (current.authMode === "local-demo") {
+  if (["local-demo", "public-demo"].includes(current.authMode)) {
     updateAuthDialog(current);
     if (!elements.authDialog.open) elements.authDialog.showModal();
     return current;
@@ -976,6 +1023,9 @@ elements.copyCodeButton.addEventListener("click", async () => {
 
 elements.localOperatorButton.addEventListener("click", () => signInLocal("operator").catch(error => toast(error.message, "error")));
 elements.localApproverButton.addEventListener("click", () => signInLocal("approver").catch(error => toast(error.message, "error")));
+elements.loginOperatorButton.addEventListener("click", () => signInLocal("operator").catch(error => toast(error.message, "error")));
+elements.loginApproverButton.addEventListener("click", () => signInLocal("approver").catch(error => toast(error.message, "error")));
+elements.loginContinueButton.addEventListener("click", () => authenticate().catch(error => toast(error.message, "error")));
 elements.closeAuthButton.addEventListener("click", cancelAuthentication);
 elements.authDialog.addEventListener("cancel", (event) => {
   event.preventDefault();
