@@ -14,7 +14,29 @@ layer of the [Secure Agent Workspace](secure-agent-workspace.md).
 | Images | Sandbox and supervisor images pinned by digest |
 | Rationale | [ADR 0001](../decisions/0001-openshell-microvm-driver.md) |
 
-## Gateway configuration
+## Gateway and Supervisor Architecture
+
+In the [OpenShell architecture](https://docs.nvidia.com/openshell/about/architecture),
+the **Gateway**, **Supervisor**, and **Sandbox** have distinct roles across the
+isolation boundary:
+
+```mermaid
+flowchart LR
+    subgraph HOST["Workspace VM Host (Trusted Side)"]
+        GW["OpenShell Gateway<br/>127.0.0.1:17670 (mTLS)"]
+        SUP["Host Supervisor Process<br/>L7 Policy Engine · DNS · Provider Store"]
+        GW <-->|"Gateway JWT (900s TTL)"| SUP
+    end
+
+    subgraph GUEST["KVM MicroVM Guest (Untrusted Side · No Network Device)"]
+        SBX["OpenShell Sandbox Daemon<br/>/proc binary check · seccomp notify"]
+        AGENT["NAT Agent Process (UID 998)<br/>Landlock hard_requirement"]
+        AGENT -->|"TCP / DNS intercepted"| SBX
+    end
+
+    SUP <-->|"OpenShell Sandbox Protocol<br/>mTLS + Sandbox JWT over vsock"| SBX
+    SUP -->|"Injects INVOICE_RUN_CAPABILITY<br/>& opens outbound TLS"| EXT["Trusted Invoice Gateway"]
+```
 
 Written by [`scripts/bootstrap-saw-openshell.sh`](../../scripts/bootstrap-saw-openshell.sh):
 
@@ -102,6 +124,11 @@ and the [bootstrap diagnostic record](../archive/openshell-bootstrap-diagnostic-
 - **Egress**: the sandbox proxy allows only the gateway routes, but the VM's
   network rules allow HTTPS to any `AzureCloud` address; see
   [Secure Agent Workspace](secure-agent-workspace.md#network-perimeter).
-- **Provider clean-up**: providers of deleted sandboxes are not
-  garbage-collected; their credentials are already expired.
-- **Signed policies**: policies are not signed or attested.
+- **Provider clean-up**: when retention cleanup removes a stopped sandbox,
+  [`console/invoice_retention_host.py`](../../src/task_agent/console/invoice_retention_host.py)
+  deletes its `invoice-run-<run_id>` OpenShell provider and garbage-collects any
+  orphaned provider markers.
+- **Signed policies**: checked-in policies are signed with Ed25519 in
+  [`policy-signatures.json`](../../infra/next-phase/openshell/policy-signatures.json)
+  and verified in [`control/invoice_governance.py`](../../src/task_agent/control/invoice_governance.py)
+  and on the VM host before `openshell sandbox create`.

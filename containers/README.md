@@ -3,16 +3,18 @@
 | Dockerfile | Runs | Base | Build script | Supply-chain evidence |
 | --- | --- | --- | --- | --- |
 | `trusted-runtime.Dockerfile` | Trusted SQL workers (`task_agent.control.runtime`) | Digest-pinned build stages, Azure Linux distroless runtime | `scripts/build-trusted-image.sh` | SBOM, vulnerability scan, detached Cosign signature, release attestation |
-| `cloud-console.Dockerfile` | Cloud dashboard (`task_agent.console.cloud`) | Digest-pinned `python:3.12-slim-bookworm` | `scripts/build-cloud-demo.sh` | Digest-pinned base and hash-locked requirements only |
-| `cloud-agent.Dockerfile` | Cloud NeMo task API (`scripts/run-cloud-agent.py`) | Digest-pinned `python:3.12-slim-bookworm` | `scripts/build-cloud-demo.sh` | Digest-pinned base and hash-locked requirements only |
-| `cloud-human.Dockerfile` | Human-handoff services (`task_agent.console.incident_service` and siblings) | Digest-pinned `python:3.12-slim-bookworm` | `scripts/build-cloud-demo.sh` | Digest-pinned base and hash-locked requirements only |
-| `invoice-agent.Dockerfile` | Invoice agent inside OpenShell sandboxes | Digest-pinned OpenShell community sandbox base plus the digest-pinned cloud-agent image | `scripts/build-invoice-agent.sh` | Digest-pinned inputs only; the build fails if any path in the invoice OpenShell policies is missing, because those policies use Landlock `hard_requirement` |
-| `invoice-services.Dockerfile` | Invoice gateways and workflow API (`task_agent.console.invoice_deployed`) | The digest-pinned invoice-agent image | `scripts/build-invoice-services.sh` | Digest-pinned input only |
+| `cloud-console.Dockerfile` | Cloud dashboard (`task_agent.console.cloud`) | Digest-pinned `python:3.12-slim-bookworm` | `scripts/build-cloud-demo.sh` | Digest-pinned base, hash-locked requirements, and `scripts/attest-container-image.sh` (SBOM, Grype scan, Cosign attestation) |
+| `cloud-agent.Dockerfile` | Cloud NeMo task API (`scripts/run-cloud-agent.py`) | Digest-pinned `python:3.12-slim-bookworm` | `scripts/build-cloud-demo.sh` | Digest-pinned base, hash-locked requirements, and `scripts/attest-container-image.sh` (SBOM, Grype scan, Cosign attestation) |
+| `cloud-human.Dockerfile` | Human-handoff services (`task_agent.console.incident_service` and siblings) | Digest-pinned `python:3.12-slim-bookworm` | `scripts/build-cloud-demo.sh` | Digest-pinned base, hash-locked requirements, and `scripts/attest-container-image.sh` (SBOM, Grype scan, Cosign attestation) |
+| `invoice-agent.Dockerfile` | Invoice agent inside OpenShell sandboxes | Digest-pinned OpenShell community sandbox base plus the digest-pinned cloud-agent image | `scripts/build-invoice-agent.sh` | Digest-pinned inputs, Landlock `hard_requirement` build path guard, and `scripts/attest-container-image.sh` |
+| `invoice-services.Dockerfile` | Invoice gateways and workflow API (`task_agent.console.invoice_deployed`) | The digest-pinned invoice-agent image | `scripts/build-invoice-services.sh` | Digest-pinned input, Ed25519-signed OpenShell policy bundle, and `scripts/attest-container-image.sh` |
 
 All images except the sandbox image run as numeric UID 65532; the sandbox image
-runs as OpenShell's `sandbox` user. Only the trusted-runtime image currently has
-an SBOM, vulnerability scan, and signature. Extending that release gate to the
-other images is outstanding work.
+runs as OpenShell's `sandbox` user. Every build script wires
+[`scripts/attest-container-image.sh`](../scripts/attest-container-image.sh) and
+[`infra/next-phase/image_attestation.py`](../infra/next-phase/image_attestation.py)
+to generate a CycloneDX SBOM, reject High/Critical Grype findings, and verify a
+detached Cosign bundle whenever the local supply-chain toolchain is present.
 
 ## Trusted Runtime Image
 

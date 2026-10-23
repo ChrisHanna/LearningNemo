@@ -12,11 +12,26 @@ and audit. Containment nests from the inside out:
 agent loop -> OpenShell sandbox -> single-user workspace VM -> SAW envelope
 ```
 
-NVIDIA groups SAW controls into three layers: baseline managed-workspace
-controls (the perimeter), runtime sandbox controls, and signed-policy
-governance, including a signed per-engagement delegation record. This
-repository implements parts of the first two layers. It is a single-user
-runtime proof of concept, not a production SAW fleet.
+NVIDIA groups SAW controls into three layers ([Figure 7: Security Envelope](https://docs.nvidia.com/enterprise-reference-architectures/secure-agent-workspace-reference-design/latest/security-and-governance-model.html)):
+baseline managed-workspace controls (Phase I perimeter), runtime sandbox
+controls (Phase II in-VM enforcement), and signed-policy governance,
+decomposed across **two structural control points** (*Workspace control* and
+*Runtime control*, where enforcement physically happens) and **four
+cross-cutting contract surfaces** (*Signed-policy*, *Credential mediation*,
+*Audit / revocation*, and *Identity / delegation*). This repository implements
+a single-user Phase II runtime proof of concept, not a production SAW fleet.
+
+## Control Surface & Residual Controls under Guest Compromise
+
+Per NVIDIA's [Security and Governance Model (Tables 6 & 7)](https://docs.nvidia.com/enterprise-reference-architectures/secure-agent-workspace-reference-design/latest/security-and-governance-model.html),
+controls inside the guest VM do not survive a root-on-OS or guest-kernel
+compromise—only controls enforced **outside** the guest remain load-bearing:
+
+| Compromise Level | In-VM / Runtime Controls (OpenShell) | External Controls That Survive Guest Root Compromise |
+| --- | --- | --- |
+| **1. Agent-level compromise** (prompt injection, scope creep, tool misuse) | OpenShell L7 route allowlist, Landlock `hard_requirement`, Python binary check, provider credential injection | 5-surface NeMo Guardrails in the external gateway; human `Approver` sign-off; exact-plan SQL broker; independent SQL verifier |
+| **2. Unprivileged process exploit** inside the MicroVM | KVM MicroVM boundary (no guest network device, `vsock`-only to host supervisor), non-root UID 998, seccomp | Host supervisor holds provider credentials outside the MicroVM; external gateway + SQL broker |
+| **3. Root-on-OS inside the Workspace VM** | *Impaired* (in-guest policy verification and provider store can be bypassed by root on the VM) | **External controls remain intact:** Untrust VNet NSG (denies inbound, east-west, and direct SQL 1433); external Invoice Gateways hold the model API key; SQL Broker enforces the approved `plan_hash` using its own Container Apps Managed Identity; control-plane VM stop & SQL capability revocation (`control.usp_revoke_invoice_run`) |
 
 ## How this repository maps to the reference design
 
@@ -24,13 +39,13 @@ runtime proof of concept, not a production SAW fleet.
 | --- | --- | --- |
 | Single-user workspace VM, approved image, managed lifecycle | Dedicated private Trusted Launch Azure VM for the website agent, pinned Ubuntu image, control-plane-owned start/stop. The invoice deployment runs it in `operator-managed` mode (no VM lease timer); per-run watchdogs and capabilities still expire | Implemented |
 | Runtime sandbox layer | OpenShell sandboxes, each in its own MicroVM, with distinct policies per role; see [OpenShell](openshell.md) | Implemented; boundary probes recorded |
-| Separate sponsor, workspace, logical-agent, and runtime identities | Entra human roles, AgentRunner logical identity, per-run sandbox capability | Designed; AgentRunner delegation partly pending |
+| Separate sponsor, workspace, logical-agent, and runtime identities | Entra human roles, AgentRunner logical identity (`agentrunner-invoice-planning`, `agentrunner-invoice-execution`), per-run sandbox capability, and Ed25519-signed `DelegationRecord` ([`control/invoice_governance.py`](../../src/task_agent/control/invoice_governance.py)) | Implemented in code; verified in CI |
 | Governed connectors with human review for sensitive writes | Capability-authenticated invoice gateways, a SQL broker that enforces the exact approved plan, an independent verifier, and a separate Approver | Implemented; sandbox Planning → approval → sandbox Execution → verification recorded 2026-09-16 (synthetic reviewer), Approver UI validated 2026-09-19 |
 | Brokered interactive access (enterprise SSO) | Not implemented | Gap |
-| Runtime credential mediation | Model key held by a trusted gateway. Opt-in OpenShell provider mode keeps the run capability out of the sandbox | Partial; provider mode not yet verified live |
+| Runtime credential mediation | Model key held by a trusted gateway. Opt-in OpenShell provider mode keeps the run capability out of the sandbox and garbage-collects providers on sandbox deletion | Partial; provider mode not yet verified live |
 | Workspace perimeter | NSGs plus OpenShell egress policy; see [Network perimeter](#network-perimeter) | Lower-cost substitute for the reference Azure Firewall Premium perimeter |
-| Signed-policy governance and delegation record | Only the trusted-worker image is signed; policies and delegations are not | Gap |
-| Kill switch outside the agent's control | Control-plane VM stop, per-run capability revocation, sandbox stop, and a root-owned admission gate (`/etc/learningnemo/invoice-availability.json`) | Partial; not bound to a signed delegation |
+| Signed-policy governance and delegation record | Checked-in OpenShell policies verified against Ed25519 signatures ([`policy-signatures.json`](../../infra/next-phase/openshell/policy-signatures.json)) in controller and on VM host; per-run `SignedDelegation` verified before sandbox execution | Implemented in code; verified in CI |
+| Kill switch outside the agent's control | Control-plane VM stop, per-run capability and delegation revocation, sandbox stop, and a root-owned admission gate (`/etc/learningnemo/invoice-availability.json`) | Implemented; bound to signed delegation hash |
 
 ## Who the workspace is for
 

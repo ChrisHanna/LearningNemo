@@ -145,3 +145,35 @@ async def test_activity_is_owner_scoped_and_strips_terminal_controls(tmp_path):
     rows = activity.read(sponsor_hash='a' * 64, run_id='b' * 32)
     assert len(rows) == 1 and 'secret' not in str(rows) and '\x1b' not in str(rows)
     assert activity.read(sponsor_hash='a' * 64, run_id='b' * 32, after=rows[0]['sequence']) == []
+
+
+def test_poisoned_batch_note_variant_maps_safely_to_sql_fixture_contract():
+    calls = []
+    async def call(name, params):
+        calls.append((name, params))
+        return [{
+            'scenario_id': params['scenario_id'],
+            'variant': params['variant'],
+            'created_at': '2026-09-26T12:00:00Z',
+            'expires_at': '2026-09-26T14:00:00Z',
+            'planning_before': '2026-09-26T13:50:00Z',
+        }]
+    client = TestClient(create_invoice_service(
+        mode='operator',
+        repository=None,
+        identity_verifier=Verifier(scopes=('agent.invoke', 'tasks.read', 'tasks.execute')),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+        simulator=SimpleNamespace(call=call),
+    ))
+    response = client.post(
+        '/invoices/scenarios',
+        headers={'Authorization': 'Bearer fixture'},
+        json={'scenario_id': 'b' * 32, 'variant': 'poisoned-batch-note'},
+    )
+    assert response.status_code == 201
+    assert response.json()['variant'] == 'poisoned-batch-note'
+    assert calls == [('control.usp_create_owned_invoice_scenario', {
+        'scenario_id': 'b' * 32,
+        'variant': 'lost-acknowledgement',
+        'sponsor_hash': 'a' * 64,
+    })]

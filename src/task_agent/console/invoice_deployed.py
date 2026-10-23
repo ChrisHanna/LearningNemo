@@ -15,7 +15,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
 from task_agent.console.identity import EntraTestSettings
-from task_agent.console.invoice_gateway import create_invoice_gateway
+from task_agent.console.invoice_gateway import create_invoice_gateway, gateway_activity_audit
 from task_agent.console.invoice_service import create_invoice_service
 from task_agent.console.invoice_remote_runtime import AzureInvoiceRuntime
 from task_agent.console.invoice_observations import add_observation_route, RemoteInvoiceObserver
@@ -76,8 +76,7 @@ def main():
             if response.status_code!=200: raise RuntimeError('model gateway credential unavailable')
             return response.json()['value']
         api_key=setup_model()
-        async def audit(**event):
-            print(json.dumps({'source':'invoice-'+kind+'-gateway',**event}),flush=True)
+        audit=gateway_activity_audit(kind)
         model=InvoiceModelGateway(origin=os.environ['OPENAI_BASE_URL'],client=http,api_key=api_key,
             rails=build_guardrails(base_url=os.environ['OPENAI_GUARDRAIL_BASE_URL'],api_key=api_key))
         app=create_invoice_gateway(kind=kind,repository=repository,inference_admission=repository,model_gateway=model,expires_at=expiry,audit=audit,availability_mode=availability_mode)

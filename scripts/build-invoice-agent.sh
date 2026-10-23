@@ -21,4 +21,9 @@ az acr build --registry "$registry" --image "$image" --file containers/invoice-a
 digest="$(az acr repository show --name "$registry" --image "$image" --query digest -o tsv)"
 [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
 printf '%s/learningnemo/invoice-agent@%s\n' "$server" "$digest" > "$state/invoice-agent.image.txt"
+printf '%s\n' "$revision" > "$state/invoice-agent.source-sha256.txt"
+tools="${LEARNINGNEMO_TOOL_DIR:-$HOME/.local/share/learningnemo/bin}"
+if [[ "${LEARNINGNEMO_ATTEST_IMAGE:-0}" == "1" || ( -x "$tools/syft" && -x "$tools/grype" && -x "$tools/cosign" ) ]]; then
+  "$root/scripts/attest-container-image.sh" "invoice-agent" "$server/learningnemo/invoice-agent@$digest" "$revision"
+fi
 printf 'PASS private invoice agent image built and digest pinned\n'

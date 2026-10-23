@@ -14,7 +14,9 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from task_agent.control.invoice_contract import Identifier, InvoicePlan, InvoiceStep, PlanningDecision
+from task_agent.control.invoice_governance import SignedDelegation, verify_delegation
 from task_agent.control.invoice_repository import capability_context
+from task_agent.control.telemetry import TelemetryCollector
 
 
 # In provider mode the run capability never enters the sandbox: OpenShell holds it in a
@@ -32,6 +34,7 @@ class RunManifest(BaseModel):
     capability: SecretStr | None = None
     expires_at: str
     plan: InvoicePlan | None = None
+    delegation: SignedDelegation | None = None
 
 
 def run_credential(manifest, environment=os.environ):
@@ -56,31 +59,42 @@ class AgentSession:
         self.decision = None
         self.receipts = []
         self.stopped = False
+        self.telemetry = TelemetryCollector()
+
+    def _correlation(self):
+        return {
+            'run_id': self.manifest.run_id,
+            'sandbox_id': self.manifest.sandbox_id,
+            'actor': self.manifest.kind,
+            'delegation_hash': self.manifest.delegation.delegation_hash if self.manifest.delegation else None,
+        }
 
     async def call(self, tool, body=None):
         allowed = {'invoice_summary', 'invoice_batches'} if self.manifest.kind == 'planning' else {'execute_step'}
         if self.stopped or tool not in allowed or self.calls >= 12:
+            self.telemetry.record(tool, 'refused', 0.0, **self._correlation())
             raise ValueError('agent tool or budget denied')
         self.calls += 1
         self.emit('tool-requested', tool=tool, source='agent-runtime')
-        try:
-            response = await self.client.post(self.manifest.gateway_origin + '/v2/invoice/tools/' + tool,
-                headers={'Authorization': 'Bearer ' + self.credential}, json=body or {}, timeout=30)
-        except httpx.HTTPError:
-            self.stopped = True
-            self.emit('tool-unconfirmed', tool=tool, source='agent-runtime', reason='transport-error')
-            raise ValueError('tool outcome unconfirmed; run stopped') from None
-        if response.status_code != 200 or len(response.content) > 65536:
-            self.stopped = True
-            self.emit('tool-unconfirmed', tool=tool, source='agent-runtime', http_status=response.status_code)
-            raise ValueError('tool call denied or unconfirmed; do not retry a mutation')
-        try:
-            result = response.json()
-        except ValueError:
-            self.stopped = True
-            raise ValueError('tool returned invalid JSON; run stopped') from None
-        self.emit('tool-returned', tool=tool, source='agent-runtime', http_status=200)
-        return result
+        async with self.telemetry.track(tool, **self._correlation()):
+            try:
+                response = await self.client.post(self.manifest.gateway_origin + '/v2/invoice/tools/' + tool,
+                    headers={'Authorization': 'Bearer ' + self.credential}, json=body or {}, timeout=30)
+            except httpx.HTTPError:
+                self.stopped = True
+                self.emit('tool-unconfirmed', tool=tool, source='agent-runtime', reason='transport-error')
+                raise ValueError('tool outcome unconfirmed; run stopped') from None
+            if response.status_code != 200 or len(response.content) > 65536:
+                self.stopped = True
+                self.emit('tool-unconfirmed', tool=tool, source='agent-runtime', http_status=response.status_code)
+                raise ValueError('tool call denied or unconfirmed; do not retry a mutation')
+            try:
+                result = response.json()
+            except ValueError:
+                self.stopped = True
+                raise ValueError('tool returned invalid JSON; run stopped') from None
+            self.emit('tool-returned', tool=tool, source='agent-runtime', http_status=200)
+            return result
 
     async def execute(self, step):
         plan = self.manifest.plan
@@ -153,6 +167,18 @@ def validate_manifest(manifest, *, now=None):
         raise ValueError('only execution accepts an approved artifact')
     if manifest.plan and manifest.sandbox_id == manifest.plan.planning_sandbox_id:
         raise ValueError('execution must use a different sandbox')
+    if manifest.delegation is not None:
+        try:
+            delegated = verify_delegation(manifest.delegation, now=now or datetime.now(UTC))
+        except Exception as error:
+            raise ValueError('invalid signed delegation record') from error
+        if (delegated.run_id != manifest.run_id or delegated.sandbox_id != manifest.sandbox_id
+                or delegated.kind != manifest.kind or delegated.expires_at != manifest.expires_at):
+            raise ValueError('delegation binding differs from run manifest')
+        if manifest.capability is not None and delegated.capability_hash != capability_context(manifest.capability.get_secret_value())[1]:
+            raise ValueError('delegation capability hash differs from run manifest')
+        if manifest.plan is not None and (delegated.plan_hash != manifest.plan.plan_hash or delegated.target_id != manifest.plan.plan_id):
+            raise ValueError('delegation plan binding differs from run manifest')
     return expiry
 
 

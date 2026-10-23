@@ -61,7 +61,7 @@ class InvoiceJobs:
         return {'job_id': job_id, 'sandbox_id': sandbox_id, 'state': 'requested'}
 
     async def audit(self, *, sponsor_hash, run_id, event):
-        fields = {'source','event_type','sandbox_id','policy_hash','kind','actor','tool','outcome','reason','http_status','uid','executed_steps','independently_verified','provenance','step_id','operation','target','revision','receipt_hash','orders','active_invoices','duplicate_invoices','expected_cents','reported_cents'}
+        fields = {'source','event_type','sandbox_id','policy_hash','delegation_hash','kind','actor','tool','outcome','reason','http_status','uid','executed_steps','independently_verified','provenance','step_id','operation','target','revision','receipt_hash','orders','active_invoices','duplicate_invoices','expected_cents','reported_cents'}
         safe = {key: value for key, value in event.items() if key in fields and type(value) in (str, bool, int)}
         for key, value in safe.items():
             if isinstance(value, str):

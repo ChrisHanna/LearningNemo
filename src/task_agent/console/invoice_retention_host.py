@@ -1,7 +1,10 @@
 """Standalone host cleanup; evidence survives outside disposable MicroVM storage."""
 
 from datetime import UTC, datetime, timedelta
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 import hashlib
 import json
 import os
@@ -92,6 +95,48 @@ def shared_delete_attempt(archives, sandbox_id, owner):
     attempts = archives / 'delete-attempts'
     private_directory(attempts, owner)
     return attempts / (sandbox_id + '.json')
+
+
+def delete_run_provider(cli, run_id, policies):
+    """Delete a run's OpenShell credential provider once its sandbox is removed."""
+    if not re.fullmatch(r'[a-f0-9]{32}', str(run_id)):
+        raise ValueError('invalid provider run identifier')
+    marker = policies / (run_id + '-provider.json')
+    if not marker.is_file():
+        return None
+    safe_path(marker)
+    name = 'invoice-run-' + run_id
+    try:
+        cli('provider', 'delete', name)
+    except RuntimeError:
+        try:
+            cli('provider', 'get', name)
+        except RuntimeError:
+            pass
+        else:
+            raise
+    marker.unlink(missing_ok=True)
+    return name
+
+
+def garbage_collect_providers(cli, remaining_inventory, policies):
+    """Garbage-collect provider records whose sandboxes are no longer in the OpenShell inventory."""
+    active_prefixes = {
+        item.get('name', '')[3:]
+        for item in remaining_inventory
+        if isinstance(item.get('name'), str) and re.fullmatch(r'i[px]-[a-f0-9]{16}', item['name'])
+    }
+    collected = []
+    if not policies.is_dir():
+        return collected
+    for marker in sorted(policies.glob('*-provider.json')):
+        run_id = marker.name[:-len('-provider.json')]
+        if not re.fullmatch(r'[a-f0-9]{32}', run_id) or run_id[:16] in active_prefixes:
+            continue
+        removed = delete_run_provider(cli, run_id, policies)
+        if removed:
+            collected.append(removed)
+    return collected
 
 
 def validate_host_binding(candidate, record, now, minimum_age_hours=24):
@@ -268,6 +313,7 @@ def retention_sweep(candidates, cli, *, apply=False, now=None, pressure=False, m
                 expected = {UUID(item['id']).hex: item['name'] for item in current if UUID(item['id']).hex != sandbox_id}
                 if {UUID(item['id']).hex: item['name'] for item in after} != expected:
                     raise RuntimeError('post-delete inventory differs; no further deletion')
+                delete_run_provider(cli, candidate['run_id'], policies)
                 write_once(archive / 'deleted.json', encoded({'run_id': candidate['run_id'], 'sandbox_id': sandbox_id,
                     'confirmed_at': datetime.now(UTC).isoformat(), 'remaining_count': len(after)}))
                 deleted.append(candidate['run_id'])
@@ -331,6 +377,8 @@ def retention_sweep(candidates, cli, *, apply=False, now=None, pressure=False, m
             deleted.append('stopped:' + sandbox_id)
             summary[sandbox_id].update(deletable=False, reason='Deletion confirmed; host evidence archived', phase='Deleted')
         remaining = json.loads(cli('sandbox', 'list', '--output', 'json'))
+        if apply and not active:
+            garbage_collect_providers(cli, remaining, policies)
         disk = os.statvfs(runs)
         return {'status': 'active-sandbox' if active else 'applied' if apply else 'preview', 'eligible': eligible, 'deleted': deleted, 'retained': retained,
                 'before_count': initial_count, 'remaining_count': len(remaining), 'free_slots': max(0, 24 - len(remaining)),

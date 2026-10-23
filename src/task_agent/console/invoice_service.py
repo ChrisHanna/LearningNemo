@@ -40,7 +40,7 @@ class AgentJobRequest(BaseModel):
 class ScenarioRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     scenario_id: Identifier
-    variant: Literal['lost-acknowledgement', 'healthy']
+    variant: Literal['lost-acknowledgement', 'healthy', 'poisoned-batch-note']
 
 
 class ChallengeRequest(BaseModel):
@@ -272,8 +272,11 @@ def create_invoice_service(*, mode, repository, identity_verifier, expires_at, c
             if simulator is None:
                 raise HTTPException(503, 'Dedicated scenario identity is not configured')
             from task_agent.control.invoice_repository import InvoiceRepository
-            rows = await simulator.call('control.usp_create_owned_invoice_scenario', {**body.model_dump(), 'sponsor_hash': user.subject_hash})
-            return InvoiceRepository.scenario_receipt(rows, body.scenario_id)
+            sql_variant = 'lost-acknowledgement' if body.variant == 'poisoned-batch-note' else body.variant
+            rows = await simulator.call('control.usp_create_owned_invoice_scenario', {'scenario_id': body.scenario_id, 'variant': sql_variant, 'sponsor_hash': user.subject_hash})
+            receipt = InvoiceRepository.scenario_receipt(rows, body.scenario_id)
+            receipt['variant'] = body.variant
+            return receipt
 
         @app.get('/invoices/scenarios/{scenario_id}')
         async def scenario_status(scenario_id: str = Path(pattern=r'^[a-f0-9]{32}$'), user=Depends(identity)):

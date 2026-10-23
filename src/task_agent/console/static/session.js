@@ -100,7 +100,8 @@
     for (const id of ["sessionSwitch", "sessionSignOut", "signOutButton"]) find(id).disabled = switching || working;
     find("sessionSignIn").disabled = (switching && state.session?.status !== "pending") || working || !state.csrfToken;
     find("sessionSignIn").hidden = signedIn;
-    for (const id of ["sessionSwitch", "sessionSignOut", "sessionOpen"]) find(id).hidden = !signedIn;
+    for (const id of ["sessionSwitch", "sessionSignOut"]) find(id).hidden = !signedIn;
+    find("sessionOpen").hidden = !signedIn || Boolean(state.invoiceEnabled);
     const incidentMode = state.session?.persona === "operator" && incident?.connected;
     find("runScenarioButton").disabled = !signedIn || state.session?.persona === "approver" || incidentMode || working || loading;
     find("sendButton").disabled = !signedIn || state.session?.persona === "approver" || incidentMode || working;

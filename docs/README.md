@@ -19,9 +19,11 @@ repository uses it (with file links), and what is not done yet.
 | Component | Role |
 | --- | --- |
 | [NeMo Agent Toolkit](nvidia/nemo-agent-toolkit.md) | Agent framework: every agent is a NAT workflow |
-| [NeMo Guardrails](nvidia/nemo-guardrails.md) | Input, output, and execution rails around every model call |
+| [NeMo Guardrails](nvidia/nemo-guardrails.md) | Input, retrieval, topical, output, and execution rails around every model call |
 | [OpenShell](nvidia/openshell.md) | MicroVM sandbox runtime with deny-by-default policy |
 | [Secure Agent Workspace](nvidia/secure-agent-workspace.md) | Reference design for the workspace envelope around the runtime |
+| [Confidential Computing & KMS](nvidia/confidential-computing.md) | NRAS GPU/CVM attestation and KMS Secure Key Release (SKR) |
+| [ISV Solutions Blueprint](nvidia/isv-blueprint.md) | Enterprise ISV architecture: threat triage, RAG, air-gapped NIMs, and production rollout |
 
 ## Guides
 

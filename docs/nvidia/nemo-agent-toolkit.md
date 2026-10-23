@@ -33,6 +33,7 @@ boundaries around the process.
 | `entra_authentication` middleware | [`security/authorization.py`](../../src/task_agent/security/authorization.py) | Verifies one Entra JWT per request: issuer, audience, client, and token age. |
 | `require_access` middleware | same file | Per-tool scope and app-role check (for example `tasks.execute` + `Task.Operator`). |
 | `semantic_guardrail` middleware | [`security/semantic_guardrail.py`](../../src/task_agent/security/semantic_guardrail.py) | Fail-closed APIM classifier call on sanitized input. |
+| `workflow_telemetry` middleware | [`security/telemetry.py`](../../src/task_agent/security/telemetry.py), [`control/telemetry.py`](../../src/task_agent/control/telemetry.py) | Correlated execution latency (`p50`/`p95`) and outcome spans bound to `request_id`, `run_id`, `sandbox_id`, and `delegation_hash`. |
 | NAT `guardrails` middleware (built in) | [`configs/agent.yml`](../../configs/agent.yml) | Hosts NeMo Guardrails rails on the workflow and on each tool; see [NeMo Guardrails](nemo-guardrails.md). |
 
 Task-agent request order: Entra authentication → PII masking input rail →

@@ -9,6 +9,7 @@ from uuid import uuid4
 from task_agent.control.canonical import content_hash
 from task_agent.control.invoice_agent import RunManifest
 from task_agent.control.invoice_contract import InvoiceEvidence, InvoicePlan, PlanningDecision
+from task_agent.control.invoice_governance import DelegationAuthority
 from task_agent.control.invoice_repository import capability_context, new_capability
 from task_agent.control.operations import OperationDeniedError
 from task_agent.control.sql_backend import SqlProcedureUnavailableError
@@ -25,7 +26,7 @@ def run_authority(run_id, prepared):
     return capability, capability_context(capability)[1]
 
 class InvoiceController:
-    def __init__(self, *, admission_client, incident_repository, verifier_repository, runtime, audit, clock=lambda: datetime.now(UTC), observer=None, sandbox_probe=None, maintenance=None):
+    def __init__(self, *, admission_client, incident_repository, verifier_repository, runtime, audit, clock=lambda: datetime.now(UTC), observer=None, sandbox_probe=None, maintenance=None, delegation_authority=None):
         self.admission, self.incidents, self.verifier = admission_client, incident_repository, verifier_repository
         self.runtime, self.audit, self.clock = runtime, audit, clock
         self.lock = asyncio.Lock()
@@ -33,6 +34,7 @@ class InvoiceController:
         self.observer = observer
         self.sandbox_probe = sandbox_probe
         self.maintenance = maintenance
+        self.delegation_authority = delegation_authority or DelegationAuthority()
 
     async def _snapshot(self, scenario_id):
         if self.observer is None: return None
@@ -52,7 +54,10 @@ class InvoiceController:
                 rows = await self.admission.call('control.usp_revoke_invoice_run', {'run_id': run_id, 'sponsor_hash': sponsor_hash})
                 if len(rows) != 1 or rows[0] != {'run_id': run_id}:
                     raise SqlProcedureUnavailableError('revocation unconfirmed; sandbox test prohibited')
-                await self._event(sponsor_hash, run_id, {'source':'workspace-controller', 'event_type':'authority-revoked', 'kind':kind})
+                revoked_event = {'source':'workspace-controller', 'event_type':'authority-revoked', 'kind':kind}
+                if 'delegation_hash' in prepared:
+                    revoked_event['delegation_hash'] = prepared['delegation_hash']
+                await self._event(sponsor_hash, run_id, revoked_event)
                 if result is not None and self.sandbox_probe is not None:
                     rows = await self.admission.call('control.usp_claim_invoice_sandbox_test', binding)
                     if len(rows) != 1 or set(rows[0]) != {'test_requested'} or rows[0]['test_requested'] not in (True, False):
@@ -81,12 +86,12 @@ class InvoiceController:
             await self._event(sponsor_hash, run_id, {'source':'workspace-controller', 'event_type':'sandbox-test-recorded',
                 'kind':kind, 'sandbox_id':prepared['sandbox_id'], 'outcome':proof['outcome'], 'actor':'controlled-probe'})
 
-    def _manifest(self, kind, run_id, prepared, capability, expires_at, plan=None):
+    def _manifest(self, kind, run_id, prepared, capability, expires_at, plan=None, delegation=None):
         if prepared['run_id'] != run_id:
             raise OperationDeniedError('sandbox preparation belongs to another run')
         return RunManifest(kind=kind, run_id=run_id, sandbox_id=prepared['sandbox_id'], capability=capability,
             gateway_origin=f'https://ca-nemo-invoice-{kind}-dev.jollybeach-503c7ed1.eastus.azurecontainerapps.io',
-            expires_at=expires_at.isoformat(), plan=plan)
+            expires_at=expires_at.isoformat(), plan=plan, delegation=delegation)
 
     async def reconcile(self, plan_id, plan_hash, *, sponsor_hash):
         if self.lock.locked():
@@ -131,7 +136,15 @@ class InvoiceController:
             result = None
             try:
                 capability, digest = run_authority(run_id, prepared)
-                expiry = self.clock() + timedelta(minutes=8)
+                issued = self.clock()
+                expiry = issued + timedelta(minutes=8)
+                delegation = self.delegation_authority.issue(
+                    kind='planning', run_id=run_id, sponsor_hash=sponsor_hash,
+                    sandbox_id=prepared['sandbox_id'], target_id=scenario_id,
+                    policy_hash=prepared['policy_hash'], capability_hash=digest,
+                    issued_at=issued, expires_at=expiry,
+                )
+                prepared['delegation_hash'] = delegation.delegation_hash
                 admission_attempted = True
                 rows = await self.admission.call('control.usp_register_invoice_planning', dict(run_id=run_id, scenario_id=scenario_id,
                     sponsor_hash=sponsor_hash, sandbox_id=prepared['sandbox_id'], policy_hash=prepared['policy_hash'],
@@ -140,8 +153,10 @@ class InvoiceController:
                     raise SqlProcedureUnavailableError('planning admission unconfirmed')
                 await self._event(sponsor_hash, run_id, {'source': 'workspace-controller', 'event_type': 'sandbox-bound',
                     'sandbox_id': prepared['sandbox_id'], 'policy_hash': prepared['policy_hash'], 'kind': 'planning'})
-                await self._event(sponsor_hash, run_id, {'source': 'workspace-controller', 'event_type': 'authority-issued', 'kind': 'planning', 'sandbox_id': prepared['sandbox_id']})
-                manifest = self._manifest('planning', run_id, prepared, capability, expiry)
+                await self._event(sponsor_hash, run_id, {'source': 'workspace-controller', 'event_type': 'authority-issued',
+                    'kind': 'planning', 'sandbox_id': prepared['sandbox_id'], 'policy_hash': prepared['policy_hash'],
+                    'delegation_hash': delegation.delegation_hash})
+                manifest = self._manifest('planning', run_id, prepared, capability, expiry, delegation=delegation)
                 async def observed(event):
                     await self._event(sponsor_hash, run_id, event)
                     if event.get('event_type') == 'tool-returned' and event.get('tool') == 'invoice_summary':
@@ -197,6 +212,15 @@ class InvoiceController:
                 if prepared['sandbox_id'] == plan.planning_sandbox_id:
                     raise OperationDeniedError('execution reused Planning sandbox')
                 capability, digest = run_authority(run_id, prepared)
+                issued = self.clock()
+                expiry = min(approval_expiry, issued + timedelta(minutes=8))
+                delegation = self.delegation_authority.issue(
+                    kind='execution', run_id=run_id, sponsor_hash=sponsor_hash,
+                    sandbox_id=prepared['sandbox_id'], target_id=plan_id,
+                    policy_hash=prepared['policy_hash'], capability_hash=digest,
+                    issued_at=issued, expires_at=expiry, plan_hash=plan_hash,
+                )
+                prepared['delegation_hash'] = delegation.delegation_hash
                 admission_attempted = True
                 rows = await self.admission.call('control.usp_claim_invoice_execution', dict(plan_id=plan_id, plan_hash=plan_hash,
                     sponsor_hash=sponsor_hash, run_id=run_id, sandbox_id=prepared['sandbox_id'],
@@ -205,8 +229,10 @@ class InvoiceController:
                     raise SqlProcedureUnavailableError('execution claim unconfirmed; reconcile before proceeding')
                 await self._event(sponsor_hash, run_id, {'source': 'workspace-controller', 'event_type': 'sandbox-bound',
                     'sandbox_id': prepared['sandbox_id'], 'policy_hash': prepared['policy_hash'], 'kind': 'execution'})
-                await self._event(sponsor_hash, run_id, {'source': 'workspace-controller', 'event_type': 'authority-issued', 'kind': 'execution', 'sandbox_id': prepared['sandbox_id']})
-                manifest = self._manifest('execution', run_id, prepared, capability, min(approval_expiry, self.clock() + timedelta(minutes=8)), plan)
+                await self._event(sponsor_hash, run_id, {'source': 'workspace-controller', 'event_type': 'authority-issued',
+                    'kind': 'execution', 'sandbox_id': prepared['sandbox_id'], 'policy_hash': prepared['policy_hash'],
+                    'delegation_hash': delegation.delegation_hash})
+                manifest = self._manifest('execution', run_id, prepared, capability, expiry, plan, delegation=delegation)
                 seen = set()
                 async def observed(event):
                     await self._event(sponsor_hash, run_id, event)

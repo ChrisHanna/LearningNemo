@@ -33,6 +33,7 @@
   function operation(name) { return operations[name] || { title: 'Unrecognized operation', effect: 'Inspect the exact artifact before proceeding.', icon: 'file-check-2' }; }
   function eventView(event) {
     const tool = tools[event.tool] || 'Tool request';
+    const eventType = event.event_type || (event.tool === 'inference' && event.outcome ? (event.outcome.includes('guardrail') ? event.outcome : 'inference-' + event.outcome) : '');
     const names = {
       'agents-session-bound': ['Agents API session bound to user and sandbox', 'harness'],
       'agent.session.environment.connected': ['OpenShell executor connected to Agents API', 'sandbox'],
@@ -59,14 +60,23 @@
       'sandbox-test-recorded': ['Same-sandbox test receipt recorded', 'sandbox'],
       'diagnostic-observed': ['SQL observed ' + event.duplicate_invoices + ' duplicate invoices', 'diagnostics'],
       'step-receipt-recorded': ['Step ' + event.step_id + ': ' + operation(event.operation).title + ' / SQL receipt recorded', 'broker'],
+      'inference-admitted': ['Inference request admitted by gateway', 'model'],
+      'guardrail-passed': ['NeMo Guardrails: input and topic rails passed', 'model'],
+      'guardrail-denied': ['NeMo Guardrails: untrusted input or topic blocked', 'model'],
+      'tool-result-guardrail-denied': ['NeMo Guardrails: tool result blocked before inference', 'model'],
+      'output-guardrail-passed': ['NeMo Guardrails: output and tool-call rails passed', 'model'],
+      'output-guardrail-denied': ['NeMo Guardrails: model output or tool call blocked', 'model'],
     };
-    const [title, component] = names[event.event_type] || ['Recorded event', 'harness'];
+    const [title, component] = names[eventType] || ['Recorded event', 'harness'];
     const reported = event.source === 'agent-runtime';
-    if (event.source === 'openai-agents-api') return {title: names[event.event_type]?.[0] || 'Agents API lifecycle event', component: names[event.event_type]?.[1] || 'harness', source: 'Agents API observation', tone: /failed|disconnected|cancelled/.test(event.event_type) ? 'warning' : 'neutral', raw: event};
-    const authoritative = ['preparing-sandbox','sandbox-bound','authority-issued','verification-started','verification-passed','authority-revoked','sandbox-stopped','sandbox-test-started','sandbox-test-recorded','diagnostic-observed','step-receipt-recorded'].includes(event.event_type);
+    const gatewaySource = ['invoice-planning-gateway', 'invoice-execution-gateway'].includes(event.source);
+    if (event.source === 'openai-agents-api') return {title: names[eventType]?.[0] || 'Agents API lifecycle event', component: names[eventType]?.[1] || 'harness', source: 'Agents API observation', tone: /failed|disconnected|cancelled/.test(eventType) ? 'warning' : 'neutral', raw: event};
+    const guardrailEvent = ['inference-admitted','guardrail-passed','guardrail-denied','tool-result-guardrail-denied','output-guardrail-passed','output-guardrail-denied'].includes(eventType);
+    if (guardrailEvent && !gatewaySource && event.source !== 'workspace-controller') return { title: 'Unverified claim: ' + title, component: 'agent', source: 'Not a gateway observation', tone: 'warning', raw: event };
+    const authoritative = ['preparing-sandbox','sandbox-bound','authority-issued','verification-started','verification-passed','authority-revoked','sandbox-stopped','sandbox-test-started','sandbox-test-recorded','diagnostic-observed','step-receipt-recorded'].includes(eventType);
     if (authoritative && event.source !== 'workspace-controller') return { title: 'Unverified claim: ' + title, component: 'agent', source: 'Not a harness observation', tone: 'warning', raw: event };
-    return { title, component, source: reported ? 'Agent-reported' : event.source === 'workspace-controller' ? 'Harness observation' : 'Source: ' + (event.source || 'unknown'),
-      tone: /denied|unconfirmed/.test(event.event_type || '') ? 'warning' : 'neutral', raw: event };
+    return { title, component, source: reported ? 'Agent-reported' : event.source === 'workspace-controller' ? 'Harness observation' : gatewaySource ? 'Trusted gateway observation' : 'Source: ' + (event.source || 'unknown'),
+      tone: /denied|unconfirmed/.test(eventType || '') ? 'warning' : 'neutral', raw: event };
   }
   function capacityMessage(job) {
     const result = job?.result;
@@ -208,7 +218,7 @@
       planId: validId(value?.planId) ? value.planId : null,
       draft: { scenarioId: validId(scenario?.scenarioId) ? scenario.scenarioId : '',
         name: typeof scenario?.name === 'string' ? scenario.name.slice(0, 120) : '',
-        variant: scenario?.variant === 'healthy' ? 'healthy' : 'lost-acknowledgement',
+        variant: ['healthy', 'poisoned-batch-note'].includes(scenario?.variant) ? scenario.variant : 'lost-acknowledgement',
         jobId: validId(scenario?.jobId) ? scenario.jobId : null,
         creationRequested: scenario?.creationRequested === true,
         scenarioStatus: scenario?.scenarioStatus?.scenario_id === scenario?.scenarioId && scenario?.scenarioStatus?.source === 'owned-scenario-status' ? { ...scenario.scenarioStatus, state: scenario.scenarioStatus.state === 'created' ? 'created' : 'unconfirmed' } : null },
@@ -221,6 +231,7 @@
   function componentEvents(component, job, events) {
     if (!job) return [];
     if (['planning', 'execution'].includes(component)) return job.kind === component ? events.filter(event => event.source === 'agent-runtime') : [];
+    if (component === 'model') return events.filter(event => eventView(event).component === 'model' && ['workspace-controller', 'invoice-planning-gateway', 'invoice-execution-gateway'].includes(event.source));
     return events.filter(event => eventView(event).component === component && event.source === 'workspace-controller');
   }
   function businessOutcome(row, before, observation) {
@@ -266,10 +277,11 @@
       event.target === row.plan_json.scenario_id && step.target === event.target && step.operation === event.operation &&
       event.revision === step.expected_revision + 1 && /^[a-f0-9]{64}$/.test(event.receipt_hash || '');
     const verification = event.source === 'workspace-controller' && event.event_type === 'verification-passed' && Boolean(verifiedChecks(row));
+    const gatewayGuardrail = metadata.component === 'model' && ['workspace-controller', 'invoice-planning-gateway', 'invoice-execution-gateway'].includes(event.source);
     return { event, title: metadata.title, source: metadata.source, component: metadata.component,
       authority: revoked ? 'Revocation recorded' : issued ? 'Run capability issuance recorded' : 'No issuance observation',
-      boundary: ({verifier:'Independent SQL verifier',sandbox:'OpenShell sandbox',harness:'Workspace admission harness',broker:'Exact-plan SQL broker',diagnostics:'Read-only diagnostic gateway'})[metadata.component] || (job.kind === 'execution' ? 'Exact-plan SQL broker' : 'Read-only diagnostic gateway'),
-      proof: receipt ? 'SQL step receipt recorded' : verification ? 'Five independent checks passed' : 'No independent receipt linked to this event',
+      boundary: ({verifier:'Independent SQL verifier',sandbox:'OpenShell sandbox',harness:'Workspace admission harness',broker:'Exact-plan SQL broker',diagnostics:'Read-only diagnostic gateway',model:'Trusted invoice gateway (NeMo Guardrails)'})[metadata.component] || (job.kind === 'execution' ? 'Exact-plan SQL broker' : 'Read-only diagnostic gateway'),
+      proof: receipt ? 'SQL step receipt recorded' : verification ? 'Five independent checks passed' : gatewayGuardrail ? (metadata.tone === 'warning' ? 'NeMo Guardrails blocked content in gateway' : 'NeMo Guardrails screening passed in gateway') : 'No independent receipt linked to this event',
       receipt: Boolean(receipt), verified: verification,
       correlation: receipt ? 'Plan step, target, operation and revision match' : 'Run context only; no request-to-receipt correlation ID',
       planHash: row?.plan_hash || null, runId: job.job_id };

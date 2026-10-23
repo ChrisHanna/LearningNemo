@@ -22,7 +22,8 @@ NVIDIA defines [five rail types](https://docs.nvidia.com/nemo/guardrails/latest/
 | **Output** | Regex secret detection, then `self check output` on model text and on `publish_decision` diagnosis, rationale, and risks | Regex secret detection and Presidio PII masking on the final answer |
 | **Execution: tool calls** (`tool_output`) | One call per response, only the role's tools, arguments valid against the `InvoiceStep` / `PlanningDecision` contracts, step targets bound to the admitted scenario, no secrets | Tool arguments checked for shell and SQL syntax before the tool runs |
 | **Execution: tool results** (`tool_input`) | Only results from the role's tools, bounded JSON, no secrets | Secret detection and PII masking before the model reads the result |
-| Dialog, retrieval | Not used; the topical rail is an input rail rather than a Colang dialog flow, because the agent runs fixed workflows instead of open chat | Not used |
+| **Retrieval** (`retrieval`) | `check invoice retrieval` (`InvoiceModelGateway.check_retrieval`) screens RAG runbook and postmortem chunks for indirect prompt injection and secrets before context assembly | Not used |
+| **Dialog** | The topical rail (`check invoice topic`) runs as an input rail rather than an open-chat Colang dialog flow because the agent executes bounded workflows | Not used |
 
 ## Keeping the agent on topic
 
@@ -62,8 +63,8 @@ the rail expected to catch it.
 
 | Mode | Scores | Runs |
 | --- | --- | --- |
-| Offline | The deterministic rails (secret detection, tool-call contracts, tool-result checks) and benign cases on those surfaces; model checks are stubbed to pass | Every pull request in CI |
-| Live | Every case, including `self check input`, the topical rail, and `self check output`, with accuracy, false positives, false negatives, and p50/p95 latency per surface | On demand; needs `OPENAI_GUARDRAIL_BASE_URL` and `GUARDRAIL_EVAL_API_KEY` |
+| Offline | 40 deterministic cases (secret detection, tool-call contracts, tool-result checks, RAG retrieval poisoning checks, and benign cases on those surfaces; Precision 100%, Recall 100%, F1 100%, p95 latency < 8 ms); 26 model-backed cases are stubbed to pass | Every pull request in CI |
+| Live | All 66 cases, including `self check input`, the topical rail, and `self check output`, with precision, recall, F1, false positives/negatives, and p50/p95 latency per surface | On demand; needs `OPENAI_GUARDRAIL_BASE_URL` and `GUARDRAIL_EVAL_API_KEY` |
 
 The script prints a Markdown report and exits 1 on any misclassified case. The
 same cases can score NemoGuard NIMs against the current self-checks.
@@ -80,11 +81,13 @@ so a compromised agent cannot skip the rails. For each model call the gateway:
 3. runs execution rails on proposed tool calls and output rails on model text;
 4. returns the response only if every rail passed, otherwise HTTP 403.
 
-Decisions are logged as gateway events: `guardrail-denied`,
+Decisions are logged and forwarded as structured gateway events: `guardrail-denied`,
 `tool-result-guardrail-denied`, `output-guardrail-denied`, and the matching
-`-passed` events. Configuration and custom actions:
-[`control/invoice_model.py`](../../src/task_agent/control/invoice_model.py) and
-[`control/invoice_rails.py`](../../src/task_agent/control/invoice_rails.py).
+`-passed` events, which render in the console activity feed and `Model + Guardrails`
+component inspector ([`static/invoice-view.js`](../../src/task_agent/console/static/invoice-view.js))
+while rejecting any unverified guardrail claim from `agent-runtime`. Configuration
+and custom actions: [`control/invoice_model.py`](../../src/task_agent/control/invoice_model.py)
+and [`control/invoice_rails.py`](../../src/task_agent/control/invoice_rails.py).
 
 **Task agent: NAT guardrails middleware** in
 [`configs/agent.yml`](../../configs/agent.yml):
@@ -106,15 +109,18 @@ the tool result with a refusal and the tool does not run.
 
 ## Gaps
 
-- **Model-backed detection quality not yet measured.** The
-  [evaluation set](#evaluation) scores the deterministic rails on every pull
-  request. The live run that measures `self check input`, the topical rail, and
-  `self check output` ([specification §18.5](../specification/next-phase-saw-openshell-spec.md#185-evaluation))
-  has not been recorded yet, and the set is small (38 cases).
-- **Rail decisions stay in logs.** They are not yet shown in the console
-  activity feed.
-- **Same-model self-checks.** Checks use the same model family as the agent.
-  NVIDIA's dedicated safety models (NemoGuard) would add model diversity.
+- **Live model-backed run not yet recorded.** The
+  [evaluation set](#evaluation) (66 labeled cases across all five surfaces:
+  `input`, `output`, `tool_call`, `tool_result`, and `retrieval`)
+  scores 40 deterministic cases on every pull request in CI. Running `--live`
+  against the APIM guardrail route to record the 26 model-backed cases
+  ([specification §18.5](../specification/next-phase-saw-openshell-spec.md#185-evaluation))
+  remains an on-demand operator step.
+- **Same-model self-checks in default cloud config.** Default cloud checks use
+  `gpt-4o-mini` via APIM; [`control/invoice_rails.py`](../../src/task_agent/control/invoice_rails.py)
+  also includes `parse_nemoguard_safety_verdict` and `TOPIC_CONTROL_PROMPT`
+  for drop-in replacement with `nvidia/llama-3.1-nemoguard-8b-content-safety`
+  and `nvidia/llama-3.1-nemoguard-8b-topic-control` NIMs.
 
 Tests: [`tests/test_invoice_model.py`](../../tests/test_invoice_model.py),
 [`tests/test_invoice_gateway.py`](../../tests/test_invoice_gateway.py),

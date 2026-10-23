@@ -201,3 +201,29 @@ def test_services_image_and_deployment_carry_the_profiles_and_mode():
     assert "{ name: 'INVOICE_CREDENTIAL_MODE', value: credentialMode }" in template
     assert "credential_mode=os.environ.get('INVOICE_CREDENTIAL_MODE','manifest')" in \
         (ROOT / 'src/task_agent/console/invoice_deployed.py').read_text()
+
+
+def test_provider_garbage_collection_deletes_only_providers_of_removed_sandboxes(tmp_path):
+    from task_agent.console.invoice_retention_host import delete_run_provider, garbage_collect_providers
+    exported = [None]
+    run_provider_block(tmp_path, exported)
+    marker = tmp_path / f'{RUN_ID}-provider.json'
+    assert marker.is_file() and json.loads(marker.read_text()) == {'run_id': RUN_ID, 'provider': provider_name(RUN_ID)}
+
+    active_run = 'c' * 32
+    active_marker = tmp_path / f'{active_run}-provider.json'
+    active_marker.write_text(json.dumps({'run_id': active_run, 'provider': provider_name(active_run)}))
+
+    deleted_providers = []
+    def cli(*args):
+        if args[:2] == ('provider', 'delete'):
+            deleted_providers.append(args[2])
+            return ''
+        raise RuntimeError('unexpected')
+
+    remaining = [{'id': '1' * 32, 'name': 'ip-' + active_run[:16], 'phase': 'Stopped'}]
+    collected = garbage_collect_providers(cli, remaining, tmp_path)
+    assert collected == [provider_name(RUN_ID)]
+    assert deleted_providers == [provider_name(RUN_ID)]
+    assert not marker.exists() and active_marker.is_file()
+    assert delete_run_provider(cli, RUN_ID, tmp_path) is None

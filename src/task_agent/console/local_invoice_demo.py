@@ -128,7 +128,18 @@ class LocalInvoiceDemoService:
             "import_version": "idempotent-v2" if repaired else "retry-unsafe-v1",
         }
 
-    def _events_for(self, job_id: str, kind: str, sandbox_id: str, plan: InvoicePlan | None = None) -> list[dict]:
+    def _events_for(
+        self,
+        job_id: str,
+        kind: str,
+        sandbox_id: str,
+        plan: InvoicePlan | None = None,
+        *,
+        variant: str = "lost-acknowledgement",
+    ) -> list[dict]:
+        policy_hash = _digest("local-policy:" + kind)
+        delegation_hash = _digest("local-delegation:" + job_id)
+        gateway_source = f"invoice-{kind}-gateway"
         names = ["preparing-sandbox", "sandbox-bound", "authority-issued", "agent-started"]
         events = [
             {
@@ -138,16 +149,52 @@ class LocalInvoiceDemoService:
                 "event_type": name,
                 "kind": kind,
                 "sandbox_id": sandbox_id,
-                "policy_hash": _digest("local-policy:" + kind),
+                "policy_hash": policy_hash,
+                **({"delegation_hash": delegation_hash} if name == "authority-issued" else {}),
             }
             for index, name in enumerate(names, 1)
         ]
         if kind == "planning":
+            events.extend([
+                {
+                    "sequence": len(events) + 1, "observed_at": _iso(), "source": gateway_source,
+                    "tool": "inference", "outcome": "admitted", "event_type": "inference-admitted", "kind": kind,
+                },
+                {
+                    "sequence": len(events) + 2, "observed_at": _iso(), "source": gateway_source,
+                    "tool": "inference", "outcome": "guardrail-passed", "event_type": "guardrail-passed", "kind": kind,
+                },
+            ])
             for name, tool in (("tool-requested", "invoice_summary"), ("tool-returned", "invoice_summary"),
                                ("tool-requested", "invoice_batches"), ("tool-returned", "invoice_batches")):
                 events.append({"sequence": len(events) + 1, "observed_at": _iso(), "source": "agent-runtime", "event_type": name, "kind": kind, "tool": tool})
+            if variant == "poisoned-batch-note":
+                events.append({
+                    "sequence": len(events) + 1, "observed_at": _iso(), "source": gateway_source,
+                    "tool": "inference", "outcome": "tool-result-guardrail-denied",
+                    "event_type": "tool-result-guardrail-denied", "kind": kind,
+                    "reason": "Blocked injected instruction in untrusted batch note",
+                })
+                events.append({
+                    "sequence": len(events) + 1, "observed_at": _iso(), "source": gateway_source,
+                    "tool": "inference", "outcome": "guardrail-passed", "event_type": "guardrail-passed", "kind": kind,
+                })
+            events.append({
+                "sequence": len(events) + 1, "observed_at": _iso(), "source": gateway_source,
+                "tool": "inference", "outcome": "output-guardrail-passed", "event_type": "output-guardrail-passed", "kind": kind,
+            })
             events.append({"sequence": len(events) + 1, "observed_at": _iso(), "source": "agent-runtime", "event_type": "decision-produced", "kind": kind})
         elif plan is not None:
+            events.extend([
+                {
+                    "sequence": len(events) + 1, "observed_at": _iso(), "source": gateway_source,
+                    "tool": "inference", "outcome": "guardrail-passed", "event_type": "guardrail-passed", "kind": kind,
+                },
+                {
+                    "sequence": len(events) + 2, "observed_at": _iso(), "source": gateway_source,
+                    "tool": "inference", "outcome": "output-guardrail-passed", "event_type": "output-guardrail-passed", "kind": kind,
+                },
+            ])
             for step in plan.steps:
                 events.append({
                     "sequence": len(events) + 1, "observed_at": _iso(), "source": "workspace-controller",
@@ -161,19 +208,64 @@ class LocalInvoiceDemoService:
             ])
         events.extend([
             {"sequence": len(events) + 1, "observed_at": _iso(), "source": "agent-runtime", "event_type": "agent-finished", "kind": kind},
-            {"sequence": len(events) + 2, "observed_at": _iso(), "source": "workspace-controller", "event_type": "authority-revoked", "kind": kind},
-            {"sequence": len(events) + 3, "observed_at": _iso(), "source": "workspace-controller", "event_type": "sandbox-stopped", "kind": kind, "sandbox_id": sandbox_id},
+            {
+                "sequence": len(events) + 2, "observed_at": _iso(), "source": "workspace-controller",
+                "event_type": "authority-revoked", "kind": kind, "delegation_hash": delegation_hash,
+            },
+            {"sequence": len(events) + 3, "observed_at": _iso(), "source": "workspace-controller", "event_type": "sandbox-test-started", "kind": kind, "sandbox_id": sandbox_id, "actor": "controlled-probe"},
+            {"sequence": len(events) + 4, "observed_at": _iso(), "source": "workspace-controller", "event_type": "sandbox-stopped", "kind": kind, "sandbox_id": sandbox_id},
+            {"sequence": len(events) + 5, "observed_at": _iso(), "source": "workspace-controller", "event_type": "sandbox-test-recorded", "kind": kind, "sandbox_id": sandbox_id, "outcome": "denied", "actor": "controlled-probe"},
         ])
         return events
+
+    @staticmethod
+    def _sandbox_test_receipt(job_id: str, kind: str, sandbox_id: str) -> dict:
+        control = "execute_step" if kind == "execution" else "invoice_summary"
+        forbidden = "invoice_summary" if kind == "execution" else "execute_step"
+        return {
+            "scope": "same-agent-sandbox",
+            "kind": kind,
+            "run_id": job_id,
+            "sandbox_id": sandbox_id,
+            "policy_hash": _digest("local-policy:" + kind),
+            "outcome": "denied",
+            "enforced_by": "OpenShell",
+            "actor": "controlled-probe",
+            "agent_requested": False,
+            "agent_authority_revoked": True,
+            "probe_capability_issued": False,
+            "executed_in_sandbox": True,
+            "sandbox_runtime": "OpenShell MicroVM",
+            "sandbox_executor": "/opt/venv/bin/python",
+            "sandbox_stopped": True,
+            "sandbox_retained": True,
+            "uid": 998,
+            "requests": [
+                {"tool": control, "status": 401},
+                {"tool": forbidden, "status": 403},
+            ],
+            "denial_evidence": [f"OCSF HTTP:POST DENIED {forbidden}"],
+        }
 
     def _create_planning_job(self, body: dict) -> dict:
         scenario_id = body["target_id"]
         if scenario_id not in self._scenarios:
             raise InvoiceRemoteError(404, "Local scenario not found")
+        variant = self._scenarios[scenario_id].get("variant", "lost-acknowledgement")
         job_id = body["job_id"]
         evidence = self._evidence(scenario_id)
         plan_id = _digest("plan:" + job_id)[:32]
         sandbox_id = _digest("sandbox:" + job_id)[:32]
+        diagnosis = (
+            "Duplicate invoices detected; untrusted batch prompt-injection blocked"
+            if variant == "poisoned-batch-note"
+            else "A retried import created duplicate invoices"
+        )
+        rationale = (
+            "Twelve orders have two active invoices after a retry. An untrusted batch note attempted to instruct the agent to skip approval and exfiltrate rows; NeMo Guardrails blocked the injected instruction while preserving structured diagnostic evidence."
+            if variant == "poisoned-batch-note"
+            else "Twelve orders have two active invoices after an acknowledgement was lost."
+        )
         plan = InvoicePlan(
             plan_id=plan_id,
             scenario_id=scenario_id,
@@ -182,8 +274,8 @@ class LocalInvoiceDemoService:
             planning_sandbox_id=sandbox_id,
             evidence_hash=_digest("evidence:" + scenario_id),
             created_at=datetime.now(UTC),
-            diagnosis="A retried import created duplicate invoices",
-            rationale="Twelve orders have two active invoices after an acknowledgement was lost.",
+            diagnosis=diagnosis,
+            rationale=rationale,
             risks=("Quarantine only the exact duplicate set and preserve legitimate invoices.",),
             steps=(
                 InvoiceStep(step_id=1, operation="invoice.quarantine-duplicates.v1", target=scenario_id, expected_revision=1, duplicate_set_hash=evidence["duplicate_set_hash"]),
@@ -204,13 +296,16 @@ class LocalInvoiceDemoService:
             "verification_json": None,
         }
         self._plans[plan_id] = row
+        sandbox_test = self._sandbox_test_receipt(job_id, "planning", sandbox_id)
         job = {
             "job_id": job_id, "kind": "planning", "target_id": scenario_id,
             "state": "finished", "created_at": _iso(),
-            "result": {"plan": row["plan_json"], "diagnostics": evidence},
+            "sandbox_test_requested": True, "sandbox_test_closed": True,
+            "sandbox_test": sandbox_test,
+            "result": {"plan": row["plan_json"], "diagnostics": evidence, "sandbox_test": sandbox_test},
         }
         self._jobs[job_id] = job
-        self._events[job_id] = self._events_for(job_id, "planning", sandbox_id)
+        self._events[job_id] = self._events_for(job_id, "planning", sandbox_id, variant=variant)
         return job
 
     def _create_execution_job(self, body: dict) -> dict:
@@ -223,10 +318,40 @@ class LocalInvoiceDemoService:
         row["state"] = "executing"
         row["execution_run_id"] = job_id
         repaired = self._evidence(plan.scenario_id, repaired=True)
+        receipts = [
+            {"step_id": step.step_id, "operation": step.operation, "revision": step.expected_revision + 1}
+            for step in plan.steps
+        ]
+        database_observation = {
+            "source": "diagnostic-sql-observation",
+            "plan_id": plan.plan_id,
+            "plan_hash": row["plan_hash"],
+            "observed_at": _iso(),
+            "summary": repaired,
+            "rows": [
+                {
+                    "order_id": f"order-{index:02d}",
+                    "attempt": 1,
+                    "amount_cents": 12000 + index * 50,
+                    "quarantined": False,
+                }
+                for index in range(1, 13)
+            ],
+            "receipts": receipts,
+        }
+        sandbox_test = self._sandbox_test_receipt(job_id, "execution", sandbox_id)
         job = {
             "job_id": job_id, "kind": "execution", "target_id": plan.plan_id,
             "plan_hash": row["plan_hash"], "state": "finished", "created_at": _iso(),
-            "result": {"diagnostics": repaired, "executed_steps": 3, "independently_verified": True},
+            "sandbox_test_requested": True, "sandbox_test_closed": True,
+            "sandbox_test": sandbox_test,
+            "result": {
+                "diagnostics": repaired,
+                "database_observation": database_observation,
+                "executed_steps": 3,
+                "independently_verified": True,
+                "sandbox_test": sandbox_test,
+            },
         }
         self._jobs[job_id] = job
         self._events[job_id] = self._events_for(job_id, "execution", sandbox_id, plan)
@@ -258,7 +383,19 @@ class LocalInvoiceDemoService:
         self._challenges[challenge_id] = record
         return record
 
-    async def request(self, method: str, path: str, token: str, body: dict | None = None, *, review: bool = False, after: int = 0) -> dict:
+    async def request(
+        self,
+        method: str,
+        path: str,
+        token: str,
+        body: dict | None = None,
+        *,
+        review: bool = False,
+        after: int = 0,
+        guest_subject: str | None = None,
+        guest_persona: str | None = None,
+    ) -> dict:
+        del guest_subject, guest_persona
         persona = self._persona(token)
         if review != (persona == "approver") and path != "/invoices/demo-session":
             raise InvoiceRemoteError(403, "Use the independently assigned local demo account")
@@ -307,6 +444,13 @@ class LocalInvoiceDemoService:
             if method == "POST" and path == "/invoices/jobs":
                 self._require_identifier(body.get("job_id", ""))
                 return self._create_planning_job(body) if body.get("kind") == "planning" else self._create_execution_job(body)
+            if method == "POST" and re.fullmatch(r"/invoices/jobs/[a-f0-9]{32}/sandbox-test", path):
+                job_id = path.split("/")[3]
+                if job_id not in self._jobs:
+                    raise InvoiceRemoteError(404, "Local job not found")
+                sandbox_id = body.get("sandbox_id", "")
+                self._require_identifier(sandbox_id)
+                return {"job_id": job_id, "sandbox_id": sandbox_id, "state": "requested"}
             if method == "GET" and re.fullmatch(r"/invoices/jobs/[a-f0-9]{32}", path):
                 job_id = path.rsplit("/", 1)[1]
                 return dict(self._jobs.get(job_id) or (_ for _ in ()).throw(InvoiceRemoteError(404, "Local job not found")))

@@ -56,6 +56,11 @@ def test_local_invoice_demo_completes_with_separate_accounts():
         json={"job_id": planning_id, "kind": "planning", "target_id": scenario_id},
     )
     assert planning.status_code == 202
+    assert planning.json()["sandbox_test"]["outcome"] == "denied"
+    assert planning.json()["sandbox_test"]["requests"] == [
+        {"tool": "invoice_summary", "status": 401},
+        {"tool": "execute_step", "status": 403},
+    ]
     plan = planning.json()["result"]["plan"]
     row = client.get("/api/invoices/plans").json()["plans"][0]
     submitted = client.post(
@@ -85,6 +90,14 @@ def test_local_invoice_demo_completes_with_separate_accounts():
         json={"job_id": execution_id, "kind": "execution", "target_id": plan["plan_id"], "plan_hash": row["plan_hash"]},
     )
     assert execution.status_code == 202
+    exec_job = execution.json()
+    assert exec_job["result"]["database_observation"]["summary"]["revision"] == 4
+    assert exec_job["result"]["database_observation"]["summary"]["duplicate_invoices"] == 0
+    assert exec_job["sandbox_test"]["outcome"] == "denied"
+    assert exec_job["sandbox_test"]["requests"] == [
+        {"tool": "execute_step", "status": 401},
+        {"tool": "invoice_summary", "status": 403},
+    ]
     verified = client.post(
         f"/api/invoices/plans/{plan['plan_id']}/reconcile",
         headers=headers,
@@ -143,3 +156,37 @@ def test_local_invoice_demo_exposes_explicit_sandbox_investigation_fixtures():
     assert client.get("/api/invoices/challenges/" + challenge_ids["approved-api"]).json()["result"]["http_status"] == 401
     assert client.get("/api/invoices/challenges/" + challenge_ids["symlink-escape-denied"]).json()["result"]["link_removed"] is True
     assert client.get("/api/invoices/challenges/" + "c" * 32).status_code == 404
+
+
+def test_local_invoice_demo_poisoned_batch_scenario_emits_guardrail_and_delegation_trace():
+    client, headers = local_client()
+    sign_in(client, headers, "operator")
+    scenario_id = "e" * 32
+    planning_id = "f" * 32
+
+    created = client.post(
+        "/api/invoices/scenarios",
+        headers=headers,
+        json={"scenario_id": scenario_id, "variant": "poisoned-batch-note"},
+    )
+    assert created.status_code == 201
+    assert created.json()["variant"] == "poisoned-batch-note"
+
+    planning = client.post(
+        "/api/invoices/jobs",
+        headers=headers,
+        json={"job_id": planning_id, "kind": "planning", "target_id": scenario_id},
+    )
+    assert planning.status_code == 202
+    plan = planning.json()["result"]["plan"]
+    assert "prompt-injection blocked" in plan["diagnosis"]
+    assert "NeMo Guardrails blocked the injected instruction" in plan["rationale"]
+
+    events = client.get(f"/api/invoices/jobs/{planning_id}/events?after=0").json()["events"]
+    event_types = [item["event_type"] for item in events]
+    assert "tool-result-guardrail-denied" in event_types
+    assert "guardrail-passed" in event_types
+    assert "output-guardrail-passed" in event_types
+    issued = next(item for item in events if item["event_type"] == "authority-issued")
+    revoked = next(item for item in events if item["event_type"] == "authority-revoked")
+    assert len(issued["delegation_hash"]) == 64 and issued["delegation_hash"] == revoked["delegation_hash"]

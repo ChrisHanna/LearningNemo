@@ -31,8 +31,14 @@ VM (`infra/next-phase/stage_invoice_image.py`) and redeploy
 | --- | --- |
 | NeMo Guardrails output and execution rails on both agents | [NeMo Guardrails](nvidia/nemo-guardrails.md) |
 | Topical rail keeping the invoice agent within the invoice-incident scope | [NeMo Guardrails](nvidia/nemo-guardrails.md#keeping-the-agent-on-topic) |
+| Guardrail decisions surfaced in the console activity feed and component inspector | [NeMo Guardrails](nvidia/nemo-guardrails.md#where-the-rails-run) |
 | Invoice sandbox policies: Landlock `hard_requirement`, Python-only egress | [OpenShell](nvidia/openshell.md#sandboxes-and-policies) |
-| Opt-in OpenShell provider mediation of run capabilities | [OpenShell](nvidia/openshell.md#run-credentials) |
+| Opt-in OpenShell provider mediation and provider garbage collection on cleanup | [OpenShell](nvidia/openshell.md#run-credentials) |
+| Ed25519-signed OpenShell policies and per-engagement `AgentRunner` delegation records | [SAW](nvidia/secure-agent-workspace.md) |
+| NVIDIA Confidential Computing (NRAS / `nvtrust`) EAT verifier and KMS Secure Key Release (SKR) policy | [Confidential Computing](nvidia/confidential-computing.md) |
+| NeMo Guardrails retrieval rail (`check invoice retrieval`), NemoGuard Content Safety NIM adapter, and poisoned-telemetry demo scenario | [NeMo Guardrails](nvidia/nemo-guardrails.md), [ISV Blueprint](nvidia/isv-blueprint.md) |
+| NAT workflow telemetry middleware and correlated sandbox tool latency spans | [NeMo Agent Toolkit](nvidia/nemo-agent-toolkit.md) |
+| Multi-image SBOM, Grype scan, and Cosign attestation helper across all container builds | [`containers/README.md`](../containers/README.md) |
 
 After redeploying, run one Planning and Execution cycle and the boundary
 challenges before relying on them.
@@ -43,9 +49,7 @@ challenges before relying on them.
 | --- | --- |
 | Controller reaches the VM through Azure Run Command (root on the VM) | [OpenShell](nvidia/openshell.md#gaps) |
 | VM egress allows HTTPS to any `AzureCloud` address; no firewall with hostname rules | [SAW](nvidia/secure-agent-workspace.md#network-perimeter) |
-| No signed policies or signed delegation record | [SAW](nvidia/secure-agent-workspace.md) |
 | No brokered interactive SSO; device-code sign-in | [SAW](nvidia/secure-agent-workspace.md) |
 | Fixed-proof sandbox policies still use Landlock `best_effort` | [OpenShell](nvidia/openshell.md#sandboxes-and-policies) |
-| Guardrail evaluation set scores deterministic rails only; live model-backed run not yet recorded | [NeMo Guardrails](nvidia/nemo-guardrails.md#evaluation) |
-| Only the trusted-worker image is signed and scanned | [`containers/README.md`](../containers/README.md) |
+| Guardrail evaluation set scores 40 deterministic cases in CI; 26 model-backed cases await a recorded `--live` run | [NeMo Guardrails](nvidia/nemo-guardrails.md#evaluation) |
 | Clean-host reproduction of the workspace not yet repeated | [Build guide](guides/build-and-reproduce.md) |

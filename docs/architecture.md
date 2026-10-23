@@ -16,36 +16,39 @@ verifier checks the database.
 flowchart LR
     USER[Operator / Approver<br/>browser] --> DASH
 
-    subgraph ACA[Azure Container Apps: trusted services]
-        DASH[Dashboard and<br/>workflow APIs]
-        GW[Invoice gateways<br/>NeMo Guardrails]
-        BROKER[SQL broker and<br/>independent verifier]
+    subgraph ACA[Trusted Platform VNet: Azure Container Apps]
+        DASH[Dashboard, Controller &<br/>DelegationAuthority]
+        GW[Invoice Gateways<br/>5-Surface NeMo Guardrails]
+        BROKER[SQL Broker &<br/>Independent Verifier]
     end
 
-    subgraph SAW[Secure Agent Workspace: private VM]
-        OSGW[OpenShell gateway]
-        subgraph MV[OpenShell MicroVM sandboxes]
+    subgraph SAW["Secure Agent Workspace: Private Azure VM envelope (SAW)"]
+        OSGW[OpenShell Gateway<br/>mTLS + Ed25519 Policy Verifier]
+        SUP[Host Supervisor<br/>Policy Engine + Provider Injection]
+        subgraph MV[OpenShell MicroVM Sandboxes<br/>No Guest NIC · Landlock + seccomp]
             PLAN[Planning agent<br/>NeMo Agent Toolkit]
             EXEC[Execution agent<br/>NeMo Agent Toolkit]
         end
-        OSGW --> PLAN
-        OSGW --> EXEC
+        OSGW -->|Gateway JWT + policy| SUP
+        SUP <-->|mTLS Sandbox Protocol<br/>over vsock| PLAN
+        SUP <-->|mTLS Sandbox Protocol<br/>over vsock| EXEC
     end
 
-    DASH -->|fixed commands| OSGW
-    PLAN -->|tools and model calls| GW
-    EXEC -->|approved step and model calls| GW
+    DASH -->|signed policy + fixed commands| OSGW
+    SUP -->|injects capability + HTTPS egress| GW
     GW --> BROKER
-    GW -->|guarded inference| APIM[Azure API Management<br/>gpt-4o-mini]
-    BROKER --> SQL[(Azure SQL)]
+    GW -->|Standard or Confidential<br/>Inference Profile| APIM[Azure APIM / NemoGuard NIMs /<br/>Confidential Container + NRAS]
+    BROKER --> SQL[(Azure SQL<br/>Private Endpoint)]
 ```
 
 | Layer | NVIDIA component | Role here | Page |
 | --- | --- | --- | --- |
-| Agent framework | NeMo Agent Toolkit | Defines and runs each agent as a YAML workflow of tools and middleware | [NeMo Agent Toolkit](nvidia/nemo-agent-toolkit.md) |
-| Content screening | NeMo Guardrails | Input, output, and execution rails on every model call, run in the trusted gateway | [NeMo Guardrails](nvidia/nemo-guardrails.md) |
-| Runtime isolation | OpenShell | One MicroVM sandbox per run with deny-by-default filesystem, process, and network policy | [OpenShell](nvidia/openshell.md) |
-| Workspace envelope | Secure Agent Workspace reference design | Private single-owner VM, lifecycle, perimeter, and governed connectors around the runtime | [Secure Agent Workspace](nvidia/secure-agent-workspace.md) |
+| Agent framework | NeMo Agent Toolkit | Defines and runs each agent as a YAML workflow of tools, security middleware, and telemetry spans | [NeMo Agent Toolkit](nvidia/nemo-agent-toolkit.md) |
+| Content screening | NeMo Guardrails | Input, topical, retrieval, tool-input/tool-output execution, and output rails in the trusted gateway | [NeMo Guardrails](nvidia/nemo-guardrails.md) |
+| Runtime isolation | OpenShell | One MicroVM sandbox per run with Ed25519-signed policy, Landlock `hard_requirement`, and provider credential mediation | [OpenShell](nvidia/openshell.md) |
+| Workspace envelope | Secure Agent Workspace reference design | 3-layer containment: private single-owner VM, OpenShell runtime, and signed per-engagement delegation governance | [Secure Agent Workspace](nvidia/secure-agent-workspace.md) |
+| Confidential Compute & KMS | NVIDIA NRAS / `nvtrust` | Hardware-rooted GPU (`GH100`/`GB200` `cc_mode=on`) + CVM (`amd-sev-snp`/`intel-tdx`) EAT verification for KMS key release | [Confidential Computing](nvidia/confidential-computing.md) |
+| Enterprise ISV rollout | ISV Solutions Blueprint | Maps threat triage, NL-to-Query, RAG poisoning defense, and PoC-to-Production maturity for cybersecurity ISVs | [ISV Blueprint](nvidia/isv-blueprint.md) |
 
 ## Trust boundaries
 
@@ -55,11 +58,60 @@ may fail.
 | Boundary | Enforced by | Stops |
 | --- | --- | --- |
 | Who is calling | Microsoft Entra roles and scopes, checked by each service | Unassigned users; a Reader executing; an Operator approving their own plan |
-| What content reaches or leaves the model | NeMo Guardrails in the gateway | Prompt injection in data, leaked secrets, off-contract tool calls |
-| What the agent process can touch | OpenShell policy in a MicroVM | Other hosts, other paths, other programs, writes outside `/tmp` |
-| What the workspace can reach | NSG rules on the VM subnet | Inbound traffic, the trusted network, direct SQL, instance metadata |
+| On whose behalf the agent runs | Ed25519 `SignedDelegation` (`control/invoice_governance.py`) | Tampered run manifests, wrong sandbox/role binding, expired or replayed delegations |
+| What content reaches or leaves the model | 5-surface NeMo Guardrails in the gateway (`control/invoice_rails.py`) | Prompt injection in telemetry or RAG chunks, off-topic drift, leaked secrets, off-contract tool calls |
+| What the agent process can touch | Ed25519-signed OpenShell policy in a MicroVM (`policy-signatures.json`) | Policy drift, other hosts, other paths, other binaries (Python-only egress), writes outside `/tmp` |
+| What credentials enter the sandbox | OpenShell Provider mediation (`openshell:resolve:env:`) | Raw run capabilities appearing in sandbox environment variables, process args, or transcripts |
+| What the workspace can reach | NSG rules on the VM subnet | Inbound traffic, the trusted network, direct SQL (port 1433), instance metadata |
 | What may change | SQL broker with the exact approved plan hash | Any step not in the approved plan, replayed steps, changed parameters |
 | Whether it worked | Independent verifier | A model or agent claiming success without the database agreeing |
+
+## How It Works: End-to-End Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Op as Operator (Entra)
+    participant Ctrl as Workspace Controller<br/>& DelegationAuthority
+    participant Host as SAW VM & OpenShell<br/>(MicroVM + Provider)
+    participant Agent as NAT Agent<br/>(Planning / Execution)
+    participant Gw as Trusted Gateway<br/>(NeMo Guardrails)
+    participant Sql as SQL Broker &<br/>Independent Verifier
+    actor Apr as Approver (Entra)
+
+    Op->>Ctrl: Create scenario (e.g. poisoned-batch-note)
+    Op->>Ctrl: Start Planning job
+    Ctrl->>Host: Verify Ed25519 policy signature, mint Provider capability, create Planning MicroVM
+    Host-->>Ctrl: sandbox_id, policy_hash, capability_hash
+    Ctrl->>Ctrl: Issue Ed25519 SignedDelegation (propose-only)
+    Ctrl->>Sql: Register Planning run (sandbox_id, policy_hash, capability_hash)
+    Ctrl->>Agent: Launch NAT Planning agent with SignedDelegation
+    Agent->>Gw: POST /invoice_summary & /invoice_batches (via OpenShell L7 proxy)
+    Gw->>Sql: Read bounded diagnostic views
+    Agent->>Gw: POST /chat/completions (untrusted batch note)
+    Gw->>Gw: Run input, topical, retrieval & tool_input rails (blocks injection)
+    Gw->>Gw: Buffer LLM response; run tool_output & output rails
+    Gw-->>Agent: Admitted tool call (publish_decision)
+    Ctrl->>Sql: Persist draft InvoicePlan (plan_hash) & revoke Planning run
+    Ctrl->>Host: Stop & retain Planning MicroVM
+
+    Op->>Sql: Submit draft plan for review
+    Apr->>Sql: Verify diagnostic evidence_hash & approve exact plan_hash
+
+    Op->>Ctrl: Start Execution job (plan_id, plan_hash)
+    Ctrl->>Host: Verify Ed25519 execution policy, mint new Provider capability, create fresh Execution MicroVM
+    Ctrl->>Ctrl: Assert sandbox_id != planning_sandbox_id; issue SignedDelegation (human-approved-plan)
+    Ctrl->>Sql: Claim execution (plan_hash, sandbox_id, capability_hash)
+    Ctrl->>Agent: Launch NAT Execution agent
+    loop Each approved InvoiceStep in order
+        Agent->>Gw: POST /execute_step (step_id, operation, expected_revision)
+        Gw->>Sql: Broker verifies exact step_hash & revision; commits transactional receipt
+        Sql-->>Agent: Durable step receipt
+    end
+    Ctrl->>Sql: Independent Verifier checks 5 SQL invariants + import replay
+    Ctrl->>Sql: Revoke Execution authority
+    Ctrl->>Host: Stop & retain Execution MicroVM; garbage-collect expired providers
+```
 
 ## One invoice incident, end to end
 

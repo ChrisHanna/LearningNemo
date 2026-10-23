@@ -81,6 +81,15 @@ class InvoiceModelGateway:
                 options={'rails': ['tool_input'], 'log': {'activated_rails': True}})
         return not invoice_rails.rail_blocked(response, invoice_rails.TOOL_INPUT_RAIL)
 
+    async def check_retrieval(self, chunks):
+        """Retrieval rail on RAG runbook/incident chunks before context assembly; fails closed."""
+        async with asyncio.timeout(30):
+            response = await self.rails.generate_async(
+                messages=[{'role': 'user', 'content': 'Invoice agent retrieved context'},
+                          {'role': 'event', 'event': {'type': 'RetrievedChunks', 'relevant_chunks': chunks}}],
+                options={'rails': ['tool_input'], 'log': {'activated_rails': True}})
+        return not invoice_rails.rail_blocked(response, invoice_rails.RETRIEVAL_RAIL)
+
     async def check_response(self, content, tool_calls, *, kind, scenario_id):
         """Execution rail on proposed tool calls, then output rails on model-written text."""
         if tool_calls:

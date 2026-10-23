@@ -26,11 +26,24 @@ ROLE_TOOLS = {
 TOOL_ARGUMENTS = {'invoice_summary': None, 'invoice_batches': None, 'publish_decision': PlanningDecision, 'execute_step': InvoiceStep}
 MAX_TOOL_ARGUMENTS = 16384
 MAX_TOOL_RESULT = 65536
+MAX_RETRIEVAL_CHUNKS = 32768
+
+RETRIEVAL_INJECTION_PATTERNS = (
+    r'(?i)\bignore\s+(all\s+)?(previous|prior|system)\s+instructions\b',
+    r'(?i)\bsystem\s*override\b',
+    r'(?i)\bskip\s+(human\s+|reviewer\s+)?approval\b',
+    r'(?i)\b(upload|exfiltrate|post)\b.{0,80}\bhttps?://',
+    r'(?i)\b(drop\s+table|delete\s+from|truncate\s+table|xp_cmdshell)\b',
+)
+
+NEMOGUARD_CONTENT_SAFETY_MODEL = 'nvidia/llama-3.1-nemoguard-8b-content-safety'
+NEMOGUARD_TOPIC_CONTROL_MODEL = 'nvidia/llama-3.1-nemoguard-8b-topic-control'
 
 TOPIC_RAIL = 'check invoice topic'
 OUTPUT_RAIL = 'check invoice output secrets'
 TOOL_OUTPUT_RAIL = 'check invoice tool calls'
 TOOL_INPUT_RAIL = 'check invoice tool results'
+RETRIEVAL_RAIL = 'check invoice retrieval'
 REFUSAL = 'refuse to respond'
 
 COLANG = f'''
@@ -60,6 +73,17 @@ define subflow {TOOL_INPUT_RAIL}
   if not $allowed
     bot refuse to respond
     stop
+
+define subflow {RETRIEVAL_RAIL}
+  $allowed = execute check_invoice_retrieval(relevant_chunks=$relevant_chunks)
+  if not $allowed
+    bot refuse to respond
+    stop
+
+define flow process retrieved chunks
+  event RetrievedChunks
+  $relevant_chunks = $event["relevant_chunks"]
+  do {RETRIEVAL_RAIL}
 '''
 
 # Written in the NemoGuard Topic Control format (system prompt of numbered rules, one-word
@@ -94,9 +118,10 @@ Should this response be blocked? Answer only Yes or No.'''
 
 
 def rails_configuration():
-    """Return the topical, output, and execution rails for the invoice gateway."""
+    """Return the topical, retrieval, output, and execution rails for the invoice gateway."""
     return {
         'input': {'flows': ['self check input', TOPIC_RAIL]},
+        'retrieval': {'flows': [RETRIEVAL_RAIL]},
         'output': {'flows': [OUTPUT_RAIL, 'self check output']},
         'tool_output': {'flows': [TOOL_OUTPUT_RAIL]},
         'tool_input': {'flows': [TOOL_INPUT_RAIL]},
@@ -107,6 +132,32 @@ def rails_configuration():
 def on_topic(verdict):
     """Only an exact on-topic verdict passes; anything else, including a truncated or empty reply, blocks."""
     return isinstance(verdict, str) and verdict.strip().strip('."\'').lower() == 'on-topic'
+
+
+def parse_nemoguard_safety_verdict(raw_output, *, check_response=False):
+    """Parse a llama-3.1-nemoguard-8b-content-safety NIM JSON verdict; fails closed on any ambiguity."""
+    if not isinstance(raw_output, str) or not raw_output.strip():
+        return False
+    try:
+        payload = json.loads(raw_output.strip())
+    except ValueError:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    user_safety = payload.get('User Safety')
+    if not isinstance(user_safety, str) or user_safety.strip().lower() != 'safe':
+        return False
+    if check_response:
+        response_safety = payload.get('Response Safety')
+        if not isinstance(response_safety, str) or response_safety.strip().lower() != 'safe':
+            return False
+    elif 'Response Safety' in payload:
+        response_safety = payload.get('Response Safety')
+        if not isinstance(response_safety, str) or response_safety.strip().lower() != 'safe':
+            return False
+    if payload.get('Safety Categories') not in (None, ''):
+        return False
+    return True
 
 
 async def check_invoice_topic(text=None, llm=None):
@@ -121,6 +172,27 @@ async def check_invoice_topic(text=None, llm=None):
 
 def contains_secret(text):
     return any(re.search(pattern, text) for pattern in SECRET_PATTERNS)
+
+
+def contains_retrieval_injection(text):
+    return any(re.search(pattern, text) for pattern in RETRIEVAL_INJECTION_PATTERNS)
+
+
+async def check_invoice_retrieval(relevant_chunks=None):
+    """Retrieval rail on RAG runbook/incident chunks before context assembly; fails closed."""
+    if isinstance(relevant_chunks, list):
+        if not relevant_chunks or any(not isinstance(item, str) for item in relevant_chunks):
+            return False
+        text = '\n'.join(relevant_chunks)
+    elif isinstance(relevant_chunks, str):
+        text = relevant_chunks
+    else:
+        return False
+    if not text.strip() or len(text) > MAX_RETRIEVAL_CHUNKS:
+        return False
+    if contains_secret(text) or contains_retrieval_injection(text):
+        return False
+    return True
 
 
 async def check_invoice_tool_calls(tool_calls=None, invoice_kind=None, scenario_id=None):
@@ -169,6 +241,7 @@ def register_actions(rails):
     rails.register_action(check_invoice_topic, name='check_invoice_topic')
     rails.register_action(check_invoice_tool_calls, name='check_invoice_tool_calls')
     rails.register_action(check_invoice_tool_result, name='check_invoice_tool_result')
+    rails.register_action(check_invoice_retrieval, name='check_invoice_retrieval')
 
 
 def rail_blocked(response, flow):

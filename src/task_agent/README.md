@@ -60,6 +60,7 @@ task_agent/
 | `security/jwt_claims.py` | Minimal parsing after trusted JWT verification | Signature validation |
 | `security/policies.py` | Canonical tool requirements and access explanations | Request identity |
 | `security/semantic_guardrail.py` | Strict APIM classifier call and fail-closed verdict parsing | Authorization decisions |
+| `security/telemetry.py` | NAT `workflow_telemetry` middleware recording correlated latency (`p50`/`p95`) and outcome spans | Authorization decisions |
 
 ### Trusted control domain (`control/`)
 
@@ -77,9 +78,12 @@ task_agent/
 | `execution.py`, `execution_transport.py` | Durable approved execution; ambiguous writes are never replayed |
 | `invoice_agent.py` | NeMo tools and sandbox entry point for the invoice agent |
 | `invoice_controller.py`, `invoice_sandbox.py` | Sponsor-bound orchestration and host-side OpenShell lifecycle; Planning and Execution never share capabilities |
+| `invoice_governance.py` | Ed25519 OpenShell policy signature verification, static OpenShell policy prover (`prove_openshell_policy`), and per-engagement `SignedDelegation` records |
+| `confidential_compute.py` | NVIDIA NRAS / `nvtrust` Entity Attestation Token (`GH100`/`GB200` `cc_mode=on` + CVM TEE) verifier and Partner KMS Secure Key Release (SKR) policy evaluation |
+| `telemetry.py` | Bounded `TelemetryCollector` and `SpanRecord` for NAT workflow and sandbox tool latency (`p50`/`p95`) correlated with `run_id`, `sandbox_id`, and `delegation_hash` |
 | `invoice_contract.py`, `invoice_catalog.py`, `invoice_repository.py`, `invoice_jobs.py` | Closed invoice contracts, fixed SQL calls and grants, and at-most-once job claims |
-| `invoice_model.py` | Trusted APIM inference transport; runs NeMo input rails, buffers each response, and runs output and execution rails before returning it |
-| `invoice_rails.py` | NeMo topical, output, and execution (`tool_output` / `tool_input`) rail flows, secret patterns, and contract checks for the invoice agent |
+| `invoice_model.py` | Trusted APIM inference transport; runs NeMo input and retrieval rails, buffers each response, and runs output and execution rails before returning it |
+| `invoice_rails.py` | NeMo topical, retrieval, output, and execution (`tool_output` / `tool_input`) rail flows, NemoGuard Content Safety NIM parser, secret patterns, and contract checks |
 | `guardrail_eval.py` | Scores the invoice rails against the labeled cases in [`evals/guardrails/`](../../evals/guardrails/cases.yml) |
 | `invoice_activity.py`, `invoice_challenges.py`, `invoice_retention.py` | Activity metadata, fixed boundary probes, and retained-sandbox evidence checks |
 | `execution_sql_probe.py`, `invoice_sql_probe.py` | Rolled-back SQL rehearsals; never human evidence |

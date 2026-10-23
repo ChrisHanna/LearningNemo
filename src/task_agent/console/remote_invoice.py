@@ -28,7 +28,7 @@ class InvoiceDecisionRequest(InvoicePlanRequest):
 class InvoiceScenarioRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     scenario_id: str = Field(pattern=r'^[a-f0-9]{32}$')
-    variant: Literal['lost-acknowledgement','healthy']
+    variant: Literal['lost-acknowledgement','healthy','poisoned-batch-note']
 
 
 class InvoiceChallengeRequest(BaseModel):

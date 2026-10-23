@@ -136,3 +136,22 @@ def test_tool_results_and_model_output_are_rail_gated():
         response = client.post(path, headers=headers, json={**body, 'stream': stream})
         assert response.status_code == 403 and b'choices' not in response.content
         assert events[-1]['outcome'] == 'output-guardrail-denied'
+        assert events[-1]['event_type'] == 'output-guardrail-denied'
+
+
+@pytest.mark.asyncio
+async def test_gateway_activity_audit_forwards_guardrail_events_to_activity_sink():
+    from task_agent.console.invoice_gateway import gateway_activity_audit
+    forwarded = []
+    async def sink(*, run_id, event):
+        forwarded.append((run_id, event))
+    audit = gateway_activity_audit('planning', activity_sink=sink)
+    await audit(run_id='a' * 32, tool='inference', outcome='guardrail-passed', event_type='guardrail-passed')
+    assert len(forwarded) == 1
+    assert forwarded[0] == ('a' * 32, {
+        'source': 'invoice-planning-gateway',
+        'run_id': 'a' * 32,
+        'tool': 'inference',
+        'outcome': 'guardrail-passed',
+        'event_type': 'guardrail-passed',
+    })

@@ -34,10 +34,13 @@ async def test_offline_evaluation_scores_deterministic_rails_without_mismatch(mo
     from langchain_openai import ChatOpenAI
     monkeypatch.setattr(ChatOpenAI, '_agenerate', ChatOpenAI._agenerate)  # restored after the stub
     report = await guardrail_eval.evaluate(guardrail_eval.offline_gateway(), guardrail_eval.load_cases(), mode='offline')
+    assert len(report.results) + len(report.skipped) >= 60
     assert report.results and not report.mismatches
     assert any(result.case['expect'] == 'block' for result in report.results)
     assert all(case['surface'] == 'input' or case['rail'] in guardrail_eval.MODEL_RAILS for case in report.skipped)
     text = guardrail_eval.render(report)
+    assert 'Precision: 100%, Recall: 100%, F1: 100%' in text
+    assert 'Latency output: p50' in text and 'Latency tool_call: p50' in text and 'Latency tool_result: p50' in text
     assert 'False positives (benign blocked): 0' in text and 'run with --live' in text
 
 

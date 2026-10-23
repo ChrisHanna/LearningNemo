@@ -15,45 +15,61 @@ database. Each step is bounded by a different control.
 
 | Component | What it does here | Details |
 | --- | --- | --- |
-| **NeMo Agent Toolkit** | Every agent is a NAT workflow: an LLM, registered tools, and security middleware defined in YAML | [NeMo Agent Toolkit](docs/nvidia/nemo-agent-toolkit.md) |
-| **NeMo Guardrails** | Input, topical, output, and execution rails on every model call, run in a trusted gateway the agent cannot bypass, scored by a labeled evaluation set | [NeMo Guardrails](docs/nvidia/nemo-guardrails.md) |
-| **OpenShell** | Each agent run gets its own MicroVM sandbox with deny-by-default filesystem, process, and network policy | [OpenShell](docs/nvidia/openshell.md) |
-| **Secure Agent Workspace** | NVIDIA's reference design for the private, single-owner workspace around the runtime | [Secure Agent Workspace](docs/nvidia/secure-agent-workspace.md) |
+| **NeMo Agent Toolkit** | Every agent is a NAT workflow: an LLM, registered tools, security middleware, and correlated telemetry defined in YAML | [NeMo Agent Toolkit](docs/nvidia/nemo-agent-toolkit.md) |
+| **NeMo Guardrails** | All 5 rail surfaces (input, topical, retrieval, tool-input/tool-output execution, and output) run in a trusted gateway the agent cannot bypass, scored by a 66-case evaluation set | [NeMo Guardrails](docs/nvidia/nemo-guardrails.md) |
+| **OpenShell** | Each agent run gets its own MicroVM sandbox with Ed25519-signed policy, Landlock `hard_requirement`, Python-only L7 egress, and provider credential mediation | [OpenShell](docs/nvidia/openshell.md) |
+| **Secure Agent Workspace** | NVIDIA's 3-layer reference design: private workspace perimeter, OpenShell runtime sandboxes, and Ed25519-signed delegation governance | [Secure Agent Workspace](docs/nvidia/secure-agent-workspace.md) |
+| **Confidential Computing & KMS** | NRAS / `nvtrust` GPU (`GH100`/`GB200` `cc_mode=on`) + CVM (`amd-sev-snp`/`intel-tdx`) EAT verifier gating Partner KMS Secure Key Release (SKR) | [Confidential Computing](docs/nvidia/confidential-computing.md) |
+| **ISV Solutions Blueprint** | Reference architecture mapping threat triage, NL-to-Query, RAG poisoning containment, and PoC-to-Production rollout for enterprise ISVs | [ISV Blueprint](docs/nvidia/isv-blueprint.md) |
 
 ```mermaid
 flowchart LR
-    OP["Operator"] -->|"creates scenario"| DASH["Dashboard and<br/>controller"]
-    APR["Approver<br/>(different Entra identity)"] -->|"approves exact plan hash"| DASH
+    OP["Operator<br/>(Entra Task.Operator)"] -->|"1. creates scenario"| DASH["Dashboard &<br/>Workspace Controller"]
+    APR["Approver<br/>(separate Entra identity)"] -->|"5. approves exact plan_hash"| DASH
 
-    subgraph SAW["Secure Agent Workspace: private VM"]
-        subgraph OS["OpenShell MicroVM, one per run"]
-            AGENT["Planning or<br/>Execution agent<br/>(NeMo Agent Toolkit)"]
-        end
+    subgraph GOV["SAW Cross-Cutting Governance"]
+        DEL["Ed25519 SignedDelegation<br/>+ Policy Signature Bundle"]
+        CC["Confidential Inference Profile<br/>(NRAS EAT + KMS SKR)"]
     end
 
-    subgraph GW["Trusted gateway: NeMo Guardrails"]
+    subgraph SAW["Secure Agent Workspace: Private Azure VM envelope (SAW)"]
+        OSGW["OpenShell Gateway (mTLS)<br/>127.0.0.1:17670"]
+        SUP["Host Supervisor (Trusted)<br/>L7 Policy + Provider Injection"]
+        subgraph MV["Per-Run OpenShell MicroVMs (No NIC, Landlock + seccomp)"]
+            PLAN["Planning Agent (NAT)<br/>Read-only diagnostics"]
+            EXEC["Execution Agent (NAT)<br/>Approved steps only"]
+        end
+        OSGW -->|"Gateway JWT + policy"| SUP
+        SUP <-->|"mTLS Sandbox Protocol<br/>over vsock"| PLAN
+        SUP <-->|"mTLS Sandbox Protocol<br/>over vsock"| EXEC
+    end
+
+    subgraph GW["Trusted Invoice Gateways: 5-Surface NeMo Guardrails"]
         direction TB
-        IN["Input rails<br/>injection check, topical rail,<br/>tool-result checks"]
-        LLM["Model via<br/>Azure API Management"]
-        OUT["Output and execution rails<br/>secret detection, output check,<br/>tool-call contract"]
+        IN["Input, Topical & Retrieval Rails<br/>+ Tool-Result (tool_input) Rail"]
+        LLM["Standard or Confidential Inference<br/>(APIM / NemoGuard NIMs)"]
+        OUT["Buffered Output & Execution Rails<br/>Secret regex, self_check_output,<br/>Pydantic tool_output contract"]
         IN --> LLM --> OUT
     end
 
-    DASH -->|"starts a fresh sandbox"| AGENT
-    AGENT -->|"every model call"| IN
-    AGENT -->|"approved step only"| BROKER["SQL broker<br/>enforces the approved plan"]
+    DASH -->|"issues & verifies"| DEL
+    LLM -.->|"optional CC serving profile"| CC
+    DASH -->|"2 & 6. prepares fresh sandbox"| OSGW
+    SUP -->|"3, 4 & 6. injects capability<br/>& relays HTTPS"| IN
+    GW -->|"exact approved step_hash"| BROKER["SQL Remediation Broker<br/>& Read-Only Diagnostic API"]
     BROKER --> SQL[("Azure SQL")]
-    VER["Independent verifier"] -->|"checks the result"| SQL
+    VER["Independent SQL Verifier"] -->|"7. verifies 5 invariants"| SQL
 ```
 
 The agent receives a model response only after every output and execution
-rail passes. Each layer assumes the one inside it can fail: the rails screen
-content, the sandbox limits what the agent process can reach, the workspace
-limits what the VM can reach, and the broker limits what can change, whatever
-the agent says.
+rail passes in the buffered gateway. Each layer assumes the one inside it can
+fail: the rails screen untrusted content and tool calls, the OpenShell MicroVM
+limits what the agent process can touch or reach, the SAW perimeter limits what
+the host VM can reach, Ed25519 signatures bind the policy and delegation
+record, and the SQL broker enforces the exact human-approved plan hash.
 
-See [Architecture](docs/architecture.md) for the full design and trust
-boundaries.
+See [Architecture](docs/architecture.md) for the full design, sequence diagram,
+and trust boundaries.
 
 ## Status
 

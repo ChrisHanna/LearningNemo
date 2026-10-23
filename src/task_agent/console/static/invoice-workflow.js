@@ -249,11 +249,12 @@
     openDraft();
     find('invoiceScenarioSetup')?.scrollIntoView({ block: 'center' });
   }
+  const scenarioLabel = variant => variant === 'healthy' ? 'Healthy import' : variant === 'poisoned-batch-note' ? 'Poisoned batch telemetry / prompt-injection containment' : 'Import retry after lost acknowledgement';
   async function createScenario(variant) {
     if (draft.scenarioId) return;
     await request(async current => {
       const scenarioId = crypto.randomUUID().replaceAll('-','');
-      draft = { scenarioId, name: variant === 'healthy' ? 'Healthy import' : 'Import retry after lost acknowledgement', variant, jobId: null, creationRequested: true,
+      draft = { scenarioId, name: scenarioLabel(variant), variant, jobId: null, creationRequested: true,
         scenarioStatus: { scenario_id: scenarioId, source: 'owned-scenario-status', state: 'pending' } };
       saveSelection(); scenarioError = ''; render();
       try {
@@ -276,7 +277,7 @@
       if (current !== generation || draft.scenarioId !== scenarioId) return;
       if (result.scenario_id !== scenarioId || result.source !== 'owned-scenario-status' || !['created','unconfirmed'].includes(result.state)) throw new Error('Scenario status binding differs');
       draft.scenarioStatus = result;
-      if (result.state === 'created') { draft.name = result.variant === 'healthy' ? 'Healthy import' : result.variant === 'lost-acknowledgement' ? 'Import retry after lost acknowledgement' : 'Existing scenario'; message = 'Scenario confirmed. No agent was started by this check.'; }
+      if (result.state === 'created') { draft.name = ['healthy', 'lost-acknowledgement', 'poisoned-batch-note'].includes(result.variant) ? scenarioLabel(result.variant) : 'Existing scenario'; message = 'Scenario confirmed. No agent was started by this check.'; }
       else scenarioError = 'No owned creation is confirmed for this ID. Keep this request ID for inspection; do not replay creation.';
       saveSelection();
     } catch (error) { if (current === generation) scenarioError = 'Scenario status unavailable. ' + error.message; }
@@ -340,7 +341,7 @@
         }
         await refreshPlans(current);
         if (currentNavigation !== navigation || current !== generation) return;
-        step = job.kind === 'planning' ? job.result?.plan ? view.planStage(currentPlan()) : 0 : 4;
+        step = job.kind === 'planning' ? job.result?.plan ? view.planStage(currentPlan()) : 0 : view.planStage(currentPlan());
         component = view.chapters[step].focus;
       }
       if (job.state === 'uncertain' && belongsToSelection) {
@@ -430,7 +431,7 @@
     const observation = view.observation(record?.job, relevant, matchingJob ? connected : record?.connected === true, matchingJob ? observedAt : record?.observedAt);
     const planningJob = row ? history.get(row.plan_json.planning_run_id)?.job || job : newInvestigation && job?.job_id !== newJobId ? null : job;
     const reviewSnapshot = row?.diagnostics;
-    const snapshot = approver() && reviewSnapshot?.source === 'invoice-diagnostic-api' && reviewSnapshot.scenario_id === row.plan_json.scenario_id && reviewSnapshot.evidence_hash === row.plan_json.evidence_hash ? reviewSnapshot : view.diagnostics(planningJob, row);
+    const snapshot = reviewSnapshot?.source === 'invoice-diagnostic-api' && reviewSnapshot.scenario_id === row.plan_json.scenario_id && reviewSnapshot.evidence_hash === row.plan_json.evidence_hash ? reviewSnapshot : view.diagnostics(planningJob, row);
     const stored = record?.job.result?.database_observation;
     const currentEvidence = row ? view.latestEvidence(row, observations.get(row.plan_json.plan_id), stored && { ...stored, plan_id:row.plan_json.plan_id, plan_hash:row.plan_hash }) : null;
     const onTrace = sequence => { traceSelections.set(runId, sequence); render(); };
@@ -554,7 +555,7 @@
       if (step === 0 && !approver() && newInvestigation) {
         const setup = node('section'); setup.id = 'invoiceScenarioSetup'; setup.append(node('h3','Test data'));
         const variantLabel = node('label', 'Scenario to create'); const variant = node('select'); variant.setAttribute('aria-label','Scenario to create');
-        for (const [value, text] of [['lost-acknowledgement','Import retry after lost acknowledgement'],['healthy','Healthy idempotent import']]) { const option=node('option',text);option.value=value;variant.append(option); }
+        for (const [value, text] of [['lost-acknowledgement','Import retry after lost acknowledgement'],['poisoned-batch-note','Poisoned batch telemetry / prompt-injection containment'],['healthy','Healthy idempotent import']]) { const option=node('option',text);option.value=value;variant.append(option); }
         variant.value = scenarioVariant; variant.addEventListener('change', () => { scenarioVariant = variant.value; draft.variant = scenarioVariant; saveSelection(); });
         variant.disabled=busy||active; variantLabel.append(variant); setup.append(variantLabel);
         if (active) setup.append(node('p', 'Another run is active or its admission is unconfirmed. Reconnect observations before starting new work.'));

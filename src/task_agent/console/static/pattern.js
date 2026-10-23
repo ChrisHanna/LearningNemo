@@ -17,30 +17,30 @@
     agent: {
       label: "02 / Delegated agent authority", title: "The agent is not the human who launched it.",
       risk: "Passing all of an Operator's authority into an autonomous process lets a task expand into unrelated operations.",
-      control: "Target design: bind a short-lived AgentRunner capability to its sponsor, task, workspace, tools, and expiry. Delegation can only narrow authority.",
-      proof: "Reject a capability for another task/workspace, an expired capability, and an attempt to approve its own plan.",
-      status: "Target design. The current fixed workspace proof is controller-mediated, not this delegated AgentRunner workflow.",
+      control: "Target design: bind a short-lived AgentRunner capability and Ed25519 SignedDelegation to its sponsor, task, workspace, tools, policy hash, and expiry. Delegation can only narrow authority.",
+      proof: "Reject a capability or signed delegation for another task/workspace, an expired capability, and an attempt to approve its own plan.",
+      status: "Ed25519 SignedDelegation and OpenShell provider mediation are implemented for the invoice workflow. The separate fixed workspace probe remains controller-mediated, not this delegated AgentRunner workflow.",
     },
     workspace: {
       label: "03 / Runtime containment", title: "Constrain what the process can do, even when the model is wrong.",
       risk: "Untrusted instructions or generated code can attempt file access, unexpected network calls, or privilege escalation.",
-      control: "The Secure Azure Environment supplies the outer private-host boundary. OpenShell hosts the sandboxes inside it and applies distinct non-root process and route policies. Guardrails inspect content before and after the model acts, including tool calls and results.",
+      control: "The Secure Agent Workspace (SAW) supplies the outer private-host boundary on Azure. OpenShell runs each agent in a networkless KVM MicroVM (Landlock hard_requirement) connected over mTLS vsock to the trusted Host Supervisor, which enforces Ed25519-signed L7 route policies and injects provider credentials. Guardrails inspect content across all 5 surfaces.",
       proof: "Execute inside Planning, observe its UID, test protected writes, and compare an allowed method/path with a denied one.",
-      status: "Sandbox bootstrap and non-root probes observed. Approved API connectivity under runtime lockdown remains unresolved.",
+      status: "Sandbox bootstrap, non-root probes, and runtime egress lockdown observed and verified.",
     },
     approval: {
       label: "04 / Consequential action", title: "A proposed fix cannot authorize itself.",
       risk: "An apparently reasonable plan can change after approval, be approved by its own author, or be replayed.",
       control: "Bind approval to the exact plan hash and a distinct actor. The deterministic broker accepts only registered, bounded operations, not arbitrary SQL.",
       proof: "Deny self-approval, a changed plan, and a reused execution grant. Show a separate valid approval before execution.",
-      status: "Approval-bound service cycle has separate evidence. Interactive Approver and sandbox-to-broker integration are pending.",
+      status: "Approval-bound SQL broker and dedicated Approver review UI are verified in the invoice workflow.",
     },
     azure: {
       label: "05 / Independent verification", title: "The result comes from the system, not the agent's final sentence.",
       risk: "A fluent success message can hide an unchanged database, partial execution, or a failed security gate.",
       control: "Dedicated workload identities perform narrow service operations. A separate verifier reads authoritative state and binds evidence to the run.",
       proof: "Compare before/after state, operation receipts, identity decisions, and verification results under one engagement ID.",
-      status: "Azure services are deployed; the complete correlated incident journey has not been demonstrated through this dashboard.",
+      status: "Five-check independent SQL verification and transactional step receipts are verified live.",
     },
   };
   const personas = [

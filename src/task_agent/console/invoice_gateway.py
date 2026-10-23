@@ -53,6 +53,17 @@ def proposal_schema(scenario_id, revision, duplicate_set_hash):
     return schema
 
 
+def gateway_activity_audit(kind, *, activity_sink=None):
+    """Build a gateway audit callback that logs JSON and optionally forwards events to the console activity sink."""
+    source = 'invoice-' + kind + '-gateway'
+    async def audit(**event):
+        record = {'source': source, **event}
+        print(json.dumps(record), flush=True)
+        if activity_sink is not None and 'run_id' in record:
+            await activity_sink(run_id=record['run_id'], event=record)
+    return audit
+
+
 def create_invoice_gateway(*, kind, repository, inference_admission, model_gateway, expires_at, audit, availability_mode='leased'):
     validate_availability(availability_mode, expires_at)
     if kind not in ('planning', 'execution'):
@@ -86,7 +97,11 @@ def create_invoice_gateway(*, kind, repository, inference_admission, model_gatew
 
     async def event(token, tool, outcome):
         run_id, _ = capability_context(token)
-        await audit(run_id=run_id, source='invoice-' + kind + '-gateway', tool=tool, outcome=outcome)
+        event_type = (
+            outcome if tool == 'inference' and 'guardrail' in outcome
+            else ('inference-' + outcome if tool == 'inference' else 'gateway-' + outcome)
+        )
+        await audit(run_id=run_id, source='invoice-' + kind + '-gateway', tool=tool, outcome=outcome, event_type=event_type)
 
     @app.exception_handler(OperationDeniedError)
     async def denied(_request, _error):

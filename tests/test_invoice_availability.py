@@ -25,7 +25,7 @@ def test_unbounded_availability_requires_explicit_mode():
 
 def test_managed_service_keeps_identity_and_scope_checks():
     async def forbidden(*args): raise AssertionError('SQL must not be reached')
-    async def verify(token): return SimpleNamespace(persona='operator',scopes={'agent.invoke','tasks.read'})
+    async def verify(token): return SimpleNamespace(persona='operator',scopes={'agent.invoke','tasks.read'},authentication='entra',subject_hash='a'*64)
     app=create_invoice_service(mode='operator',repository=None,identity_verifier=SimpleNamespace(verify=verify),
         expires_at=None,availability_mode='operator-managed',simulator=SimpleNamespace(call=forbidden))
     client=TestClient(app)

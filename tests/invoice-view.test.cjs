@@ -277,3 +277,35 @@ test('Agents API lifecycle remains distinct from sandbox and harness claims', ()
   assert.equal(view.observation({kind:'planning',state:'rejected'},[],true,Date.now()).state,'rejected');
   assert.equal(view.blocksNewWork({state:'rejected'}),false);
 });
+
+test('NeMo Guardrails gateway decisions surface in the activity feed and reject sandbox spoofing', () => {
+  const passed = view.eventView({ source: 'invoice-planning-gateway', tool: 'inference', outcome: 'guardrail-passed', event_type: 'guardrail-passed' });
+  assert.equal(passed.title, 'NeMo Guardrails: input and topic rails passed');
+  assert.equal(passed.component, 'model');
+  assert.equal(passed.source, 'Trusted gateway observation');
+  assert.equal(passed.tone, 'neutral');
+
+  const denied = view.eventView({ source: 'invoice-execution-gateway', tool: 'inference', outcome: 'output-guardrail-denied', event_type: 'output-guardrail-denied' });
+  assert.equal(denied.title, 'NeMo Guardrails: model output or tool call blocked');
+  assert.equal(denied.component, 'model');
+  assert.equal(denied.tone, 'warning');
+
+  const spoofed = view.eventView({ source: 'agent-runtime', event_type: 'guardrail-passed' });
+  assert.match(spoofed.title, /Unverified claim/);
+  assert.equal(spoofed.component, 'agent');
+  assert.equal(spoofed.tone, 'warning');
+
+  const job = { job_id: 'run', kind: 'planning' };
+  const events = [
+    { sequence: 1, source: 'workspace-controller', event_type: 'authority-issued' },
+    { sequence: 2, source: 'invoice-planning-gateway', tool: 'inference', outcome: 'guardrail-passed', event_type: 'guardrail-passed' },
+    { sequence: 3, source: 'agent-runtime', event_type: 'guardrail-passed' },
+    { sequence: 4, source: 'invoice-planning-gateway', tool: 'inference', outcome: 'output-guardrail-denied', event_type: 'output-guardrail-denied' },
+  ];
+  assert.deepEqual(view.componentEvents('model', job, events), [events[1], events[3]]);
+  const detailPassed = view.traceDetail(job, events, null, 0, 2);
+  assert.equal(detailPassed.boundary, 'Trusted invoice gateway (NeMo Guardrails)');
+  assert.equal(detailPassed.proof, 'NeMo Guardrails screening passed in gateway');
+  const detailDenied = view.traceDetail(job, events, null, 0, 4);
+  assert.equal(detailDenied.proof, 'NeMo Guardrails blocked content in gateway');
+});

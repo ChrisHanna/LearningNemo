@@ -22,8 +22,13 @@ ROOT = Path(__file__).parents[3]
 CASES = ROOT / 'evals' / 'guardrails' / 'cases.yml'
 SCENARIO = 'b' * 32
 OTHER_SCENARIO = 'c' * 32
-SURFACES = ('input', 'output', 'tool_call', 'tool_result')
-DETERMINISTIC_RAILS = {invoice_rails.OUTPUT_RAIL, invoice_rails.TOOL_OUTPUT_RAIL, invoice_rails.TOOL_INPUT_RAIL}
+SURFACES = ('input', 'output', 'tool_call', 'tool_result', 'retrieval')
+DETERMINISTIC_RAILS = {
+    invoice_rails.OUTPUT_RAIL,
+    invoice_rails.TOOL_OUTPUT_RAIL,
+    invoice_rails.TOOL_INPUT_RAIL,
+    invoice_rails.RETRIEVAL_RAIL,
+}
 MODEL_RAILS = {'self check input', invoice_rails.TOPIC_RAIL, 'self check output'}
 
 
@@ -95,6 +100,8 @@ async def run_case(gateway, case):
     if surface == 'tool_call':
         call = {'id': 'call-1', 'name': case['tool'], 'arguments': _arguments(case)}
         return not await gateway.check_response('', [call], kind=case['kind'], scenario_id=SCENARIO)
+    if surface == 'retrieval':
+        return not await gateway.check_retrieval(case['content'])
     messages = [{'role': 'user', 'content': 'Investigate the invoice incident'},
                 {'role': 'assistant', 'content': None, 'tool_calls': [
                     {'id': 'call-1', 'type': 'function', 'function': {'name': case['tool'], 'arguments': '{}'}}]},
@@ -127,17 +134,21 @@ def render(report):
     total, correct = len(report.results), sum(result.correct for result in report.results)
     allowed = [result for result in report.results if result.case['expect'] == 'allow']
     blocked = [result for result in report.results if result.case['expect'] == 'block']
+    true_positives = [result for result in blocked if result.blocked]
     false_positives = [result for result in allowed if result.blocked]
     false_negatives = [result for result in blocked if not result.blocked]
+    precision = len(true_positives) / (len(true_positives) + len(false_positives)) if (true_positives or false_positives) else 1.0
+    recall = len(true_positives) / len(blocked) if blocked else 1.0
+    f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
     lines += ['', f'- Scored: {total}, correct: {correct}' + (f' ({correct / total:.0%})' if total else ''),
+              f'- Precision: {precision:.0%}, Recall: {recall:.0%}, F1: {f1:.0%}',
               f'- False positives (benign blocked): {len(false_positives)} of {len(allowed)}',
               f'- False negatives (attacks allowed): {len(false_negatives)} of {len(blocked)}']
-    if report.mode == 'live':
-        for surface in SURFACES:
-            seconds = sorted(result.seconds for result in report.results if result.case['surface'] == surface)
-            if seconds:
-                p95 = seconds[min(len(seconds) - 1, round(0.95 * (len(seconds) - 1)))]
-                lines.append(f'- Latency {surface}: p50 {statistics.median(seconds) * 1000:.0f} ms, p95 {p95 * 1000:.0f} ms')
+    for surface in SURFACES:
+        seconds = sorted(result.seconds for result in report.results if result.case['surface'] == surface)
+        if seconds:
+            p95 = seconds[min(len(seconds) - 1, round(0.95 * (len(seconds) - 1)))]
+            lines.append(f'- Latency {surface}: p50 {statistics.median(seconds) * 1000:.1f} ms, p95 {p95 * 1000:.1f} ms')
     if report.skipped:
         lines.append(f'- Not scored offline (need a live model): {len(report.skipped)} cases; run with --live')
     for result in report.mismatches:

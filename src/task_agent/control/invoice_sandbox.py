@@ -12,6 +12,7 @@ import yaml
 
 from task_agent.control.canonical import content_hash
 from task_agent.control.invoice_agent import RunManifest, validate_manifest
+from task_agent.control.invoice_governance import verify_policy_directory
 
 
 IMAGE = re.compile(r'^crlearningnemodevgruyrc4qwdvvm\.azurecr\.io/learningnemo/invoice-agent@sha256:[a-f0-9]{64}$')
@@ -37,10 +38,11 @@ def sandbox_name(kind, run_id):
 
 
 class OpenShellInvoiceRuntime:
-    def __init__(self, image, policy_directory, *, command=subprocess.run, process=asyncio.create_subprocess_exec):
+    def __init__(self, image, policy_directory, *, command=subprocess.run, process=asyncio.create_subprocess_exec, require_signed_policy=False):
         if not IMAGE.fullmatch(image):
             raise ValueError('pinned owned invoice agent image required')
         self.image, self.policy_directory, self.command, self.process = image, Path(policy_directory), command, process
+        self.require_signed_policy = require_signed_policy
 
     def cli(self, *arguments, timeout=60):
         result = self.command(['openshell', '--gateway', 'openshell', *arguments], capture_output=True, text=True, timeout=timeout, check=False)
@@ -66,7 +68,9 @@ class OpenShellInvoiceRuntime:
         if any(item.get('phase') not in ('Stopped', 'Error') for item in retained):
             raise RuntimeError('another invoice sandbox is active')
         policy_path = self.policy_directory / f'invoice-{kind}-policy.yaml'
-        expected = yaml.safe_load(policy_path.read_text())
+        policy_text = policy_path.read_text()
+        verify_policy_directory(self.policy_directory, policy_path.name, policy_text, require_signed=self.require_signed_policy)
+        expected = yaml.safe_load(policy_text)
         self.cli('sandbox', 'create', '--name', name, '--from', self.image, '--policy', str(policy_path),
                  '--cpu', '1', '--memory', '2Gi', '--detach', '--', '/bin/sleep', 'infinity', timeout=240)
         try:

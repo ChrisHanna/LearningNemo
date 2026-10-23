@@ -40,6 +40,9 @@ for kind in "${kinds[@]}"; do
   printf '%s/%s@%s\n' "$server" "learningnemo/cloud-$kind" "$digest" > "$state/cloud-$kind.image.txt"
   echo "PASS cloud $kind image built and pinned"
   printf '%s\n' "$revision" > "$state/cloud-$kind.source-sha256.txt"
+  if [[ "${LEARNINGNEMO_ATTEST_IMAGE:-0}" == "1" || ( -x "$tools/syft" && -x "$tools/grype" && -x "$tools/cosign" ) ]]; then
+    "$root/scripts/attest-container-image.sh" "cloud-$kind" "$server/learningnemo/cloud-$kind@$digest" "$revision"
+  fi
 done
 if [[ "${1:-all}" == all ]]; then
   printf '%s\n' "$revision" > "$state/cloud-demo.source-sha256.txt"

@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from task_agent.console.invoice_availability import validate_availability_mode
 from task_agent.control.canonical import content_hash
+from task_agent.control.invoice_governance import verify_policy_directory
 from task_agent.control.invoice_sandbox import IMAGE, SandboxCapacityError, sandbox_name
 
 
@@ -69,6 +70,8 @@ capability={run_id!r}+'.'+secrets.token_urlsafe(32)
 capability_hash=hashlib.sha256(capability.encode('ascii')).hexdigest()
 secret_cli('provider','create','--name',provider,'--type',expected_profile['id'],'--credential',{CAPABILITY_ENV!r},secret=capability)
 del capability
+provider_marker=policies/({run_id!r}+'-provider.json')
+with open(os.open(provider_marker,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o644),'w') as output: json.dump({{'run_id':{run_id!r},'provider':provider}},output)
 mediation={{'capability_hash':capability_hash,'provider':provider}}
 provider_arguments=['--provider',provider]
 '''
@@ -86,12 +89,25 @@ except RuntimeError:
 '''
 
 
-def prepare_script(kind, run_id, image, policy, availability_mode='leased', provider_profile=None):
+def policy_verification_block(policy_signature):
+    """Host code that verifies the Ed25519 signature of the staged OpenShell policy before sandbox creation."""
+    encoded = base64.b64encode(json.dumps(policy_signature, sort_keys=True).encode()).decode()
+    return f'''
+import hashlib
+sig_meta=json.loads(base64.b64decode({encoded!r}))
+policy_bytes=policy.read_bytes()
+assert hashlib.sha256(policy_bytes).hexdigest()==sig_meta['sha256'], 'host policy bytes differ from signed digest'
+statement={{'version':1,'key_id':sig_meta['key_id'],'policy_file':sig_meta['policy_file'],'policy_hash':sig_meta['policy_hash'],'sha256':sig_meta['sha256']}}
+serialization.load_pem_public_key(sig_meta['public_key'].encode('ascii')).verify(base64.b64decode(sig_meta['signature']),json.dumps(statement,ensure_ascii=True,separators=(',',':'),sort_keys=True).encode('utf-8'))
+'''
+
+
+def prepare_script(kind, run_id, image, policy, availability_mode='leased', provider_profile=None, policy_signature=None):
     name = sandbox_name(kind, run_id)
     validate_availability_mode(availability_mode)
     if not IMAGE.fullmatch(image):
         raise ValueError('pinned invoice image required')
-    encoded = base64.b64encode(policy.encode()).decode()
+    encoded = base64.b64encode(policy.replace('\r\n', '\n').encode()).decode()
     if availability_mode == 'operator-managed':
         admission = '''
 gate=pathlib.Path('/etc/learningnemo/invoice-availability.json')
@@ -109,6 +125,7 @@ deadline_seconds=int(subprocess.check_output(['date','-u','-d',deadline,'+%s'],t
 assert deadline_seconds-int(__import__('time').time())>1260, 'workspace lease too short'
 '''
     provider = textwrap.indent(provider_block(kind, run_id, provider_profile), '    ') if provider_profile is not None else ''
+    verify_policy = policy_verification_block(policy_signature) if policy_signature is not None else ''
     return HOST_PREFIX + f'''
 name={name!r}
 {admission}
@@ -147,7 +164,7 @@ policies.mkdir(mode=0o755,exist_ok=True)
 policy=policies/({run_id!r}+'.yaml')
 with open(os.open(policy,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o644),'wb') as output: output.write(base64.b64decode({encoded!r}))
 os.chmod(policy,0o644)
-disk=os.statvfs(root)
+{verify_policy}disk=os.statvfs(root)
 assert disk.f_bavail*disk.f_frsize>=4*1024**3, 'retained workspace free-space floor reached'
 assert all(sandbox_quiescent(item) for item in inventory), 'another sandbox is active or an Error record is not quiescent'
 assert all(item['name']!=name for item in inventory)
@@ -206,13 +223,14 @@ PY
 
 
 class AzureInvoiceRuntime:
-    def __init__(self, *, compute_client, image, policies, availability_mode='leased', credential_mode='manifest'):
+    def __init__(self, *, compute_client, image, policies, availability_mode='leased', credential_mode='manifest', require_signed_policy=False):
         if not IMAGE.fullmatch(image):
             raise ValueError('fixed invoice image required')
         validate_availability_mode(availability_mode)
         if credential_mode not in ('manifest','provider'):
             raise ValueError('explicit run credential mode required')
         self.availability_mode, self.credential_mode = availability_mode, credential_mode
+        self.require_signed_policy = require_signed_policy
         self.compute, self.image, self.policies = compute_client, image, Path(policies)
         self.prepared = {}
 
@@ -224,9 +242,11 @@ class AzureInvoiceRuntime:
 
     def prepare(self, kind, run_id, lease_seconds=600):
         import yaml
-        policy = (self.policies / f'invoice-{kind}-policy.yaml').read_text()
+        policy_file = f'invoice-{kind}-policy.yaml'
+        policy = (self.policies / policy_file).read_text()
+        verified_policy = verify_policy_directory(self.policies, policy_file, policy, require_signed=self.require_signed_policy)
         profile = yaml.safe_load((self.policies / f'invoice-{kind}-provider-profile.yaml').read_text()) if self.credential_mode == 'provider' else None
-        result = self.command(prepare_script(kind,run_id,self.image,policy,self.availability_mode,profile))
+        result = self.command(prepare_script(kind,run_id,self.image,policy,self.availability_mode,profile,verified_policy))
         records = [json.loads(line[len('INVOICE_PREPARED '):]) for line in result.splitlines() if line.startswith('INVOICE_PREPARED ')]
         blocked = [json.loads(line[len('INVOICE_ADMISSION_BLOCKED '):]) for line in result.splitlines() if line.startswith('INVOICE_ADMISSION_BLOCKED ')]
         if blocked:
