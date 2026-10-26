@@ -63,9 +63,21 @@ class InvoiceSandboxManager:
         self.runtime, self.client, self.controller = runtime, client, controller
         self.changed = asyncio.Event()
         self.demo = InvoiceDemoSession(notify=self.notify)
+        self._verified_remaining: int | None = None
+        self._verified_at: datetime | None = None
 
     def notify(self):
+        self._verified_remaining = None
+        self._verified_at = None
         self.changed.set()
+
+    def record_sweep(self, result):
+        if result.get('status') == 'applied' and type(result.get('remaining_count')) is int:
+            self._verified_remaining = result['remaining_count']
+            self._verified_at = datetime.now(UTC)
+        else:
+            self._verified_remaining = None
+            self._verified_at = None
 
     async def inventory(self, sponsor_hash):
         async with self.controller.lock:
@@ -81,13 +93,22 @@ class InvoiceSandboxManager:
             raise OperationDeniedError('Agent work is active; deletion is blocked')
         async with self.controller.lock:
             result = await sweep(self.runtime, self.client, apply=True, sponsor_hash=sponsor_hash, manual_id=sandbox_id)
+        self.record_sweep(result)
         receipt = next((item for item in result.get('sandboxes', []) if item['sandbox_id'] == sandbox_id and item['phase'] == 'Deleted'), None)
         if receipt is None:
             raise OperationDeniedError('Deletion not confirmed. Refresh inventory; do not replay the request')
         return {'sandbox_id': sandbox_id, 'state': 'deleted', 'evidence_archived': True}
 
     async def before_run(self):
+        if (
+            self._verified_remaining is not None
+            and self._verified_at is not None
+            and self._verified_remaining < 11
+            and datetime.now(UTC) - self._verified_at < timedelta(minutes=10)
+        ):
+            return
         result = await cleanup_pressure(self.runtime, self.client)
+        self.record_sweep(result)
         if result.get('status') != 'applied' or type(result.get('remaining_count')) is not int:
             raise OperationDeniedError('Sandbox capacity could not be verified; no new sandbox admitted')
         if result['remaining_count'] >= 23:
@@ -120,6 +141,7 @@ def retention_lifespan(runtime, client, controller, *, manager=None):
                                 result = await cleanup_pressure(runtime, client)
                             finally:
                                 controller.maintenance_active = False
+                        manager.record_sweep(result)
                         print('INVOICE_RETENTION_STATUS ' + json.dumps(result), flush=True)
                         if final:
                             manager.demo.finish_cleanup(result.get('status') == 'applied')

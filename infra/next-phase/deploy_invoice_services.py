@@ -21,7 +21,7 @@ INVOICE_MIGRATIONS = (
     '008_invoice_lab.sql', '009_invoice_workflow.sql', '010_invoice_jobs.sql', '011_invoice_recovery.sql',
     '012_invoice_retention.sql', '013_invoice_review_window.sql', '014_invoice_bound_sandbox_test.sql',
     '015_invoice_retention_pressure.sql', '016_invoice_doubled_windows.sql', '017_invoice_agents_api.sql',
-    '018_invoice_demo_lifecycle.sql', '019_invoice_public_demo.sql',
+    '018_invoice_demo_lifecycle.sql', '019_invoice_public_demo.sql', '020_invoice_guest_review_evidence.sql',
 )
 GROUP='rg-learningnemo-invoice-dev'
 KINDS=('operator','review','planning','execution','verifier','simulator')
@@ -77,6 +77,8 @@ def prepare():
     image=(STATE/'invoice-services.image.txt').read_text().strip(); agent_image=(STATE/'invoice-agent.image.txt').read_text().strip()
     for value,repository in ((image,'invoice-services'),(agent_image,'invoice-agent')):
         if not re.fullmatch(re.escape(registry['loginServer']+'/learningnemo/'+repository)+r'@sha256:[a-f0-9]{64}',value): raise ValueError('owned pinned image required')
+    from stage_invoice_image import require_staged_image
+    require_staged_image(STATE, agent_image)
     values=dict(location='eastus',environmentId=environment['id'],registryServer=registry['loginServer'],image=image,agentImage=agent_image,
         expiresAt=expiry.isoformat() if expiry else '',availabilityMode=availability_mode,credentialMode=credential_mode,tenantId=settings['ENTRA_TENANT_ID'],apiClientId=settings['ENTRA_CLIENT_ID'],publicClientId=settings['ENTRA_PUBLIC_CLIENT_ID'],
         sqlServer=server['fullyQualifiedDomainName'],modelOrigin=env['OPENAI_BASE_URL'],guardrailOrigin=env['OPENAI_GUARDRAIL_BASE_URL'],subscriptionId=subscription,

@@ -106,7 +106,7 @@ def create_invoice_service(*, mode, repository, identity_verifier, expires_at, c
                 and (
                     request.method == 'GET'
                     and (
-                        request.url.path in ('/invoices/plans', '/invoices/demo-session')
+                        request.url.path in ('/invoices/plans', '/invoices/demo-session', '/invoices/sandboxes')
                         or re.fullmatch(r'/invoices/scenarios/[a-f0-9]{32}', request.url.path)
                         or re.fullmatch(r'/invoices/jobs/[a-f0-9]{32}(/events)?', request.url.path)
                         or re.fullmatch(r'/invoices/challenges/[a-f0-9]{32}', request.url.path)
@@ -115,7 +115,8 @@ def create_invoice_service(*, mode, repository, identity_verifier, expires_at, c
                     or request.method == 'POST'
                     and (
                         request.url.path in ('/invoices/scenarios', '/invoices/jobs', '/invoices/challenges')
-                        or re.fullmatch(r'/invoices/plans/[a-f0-9]{32}/submit', request.url.path)
+                        or re.fullmatch(r'/invoices/plans/[a-f0-9]{32}/(submit|reconcile|complete)', request.url.path)
+                        or re.fullmatch(r'/invoices/sandboxes/[a-f0-9]{32}/delete', request.url.path)
                     )
                 )
                 or mode == 'review'
@@ -290,10 +291,29 @@ def create_invoice_service(*, mode, repository, identity_verifier, expires_at, c
             if body.target_id in TARGETS.values(): raise HTTPException(422, 'Probe targets cannot be used as agent jobs')
             if body.kind == 'execution' and 'tasks.execute' not in user.scopes:
                 raise HTTPException(403, 'Execution scope required')
-            if user.authentication == 'guest' and body.kind != 'planning':
-                raise HTTPException(403, 'Public demo execution is disabled')
             if (body.kind == 'execution') != (body.plan_hash is not None):
                 raise HTTPException(422, 'Execution requires the exact plan hash')
+            if user.authentication == 'guest' and body.kind == 'execution':
+                # Reject before quota/enqueue; the controller and SQL broker
+                # independently recheck ownership, approval and exact steps.
+                plans = await repository.plans(user.subject_hash)
+                owned = next((row for row in plans if row['plan_json']['plan_id'] == body.target_id
+                    and row['plan_json']['sponsor_hash'] == user.subject_hash
+                    and row['plan_hash'] == body.plan_hash and row['state'] == 'approved'), None)
+                if owned is None:
+                    raise OperationDeniedError('An owned, independently approved plan with its exact hash is required')
+                expiry = owned.get('approval_expires_at')
+                if isinstance(expiry,str):
+                    try:
+                        expiry = datetime.fromisoformat(expiry.replace('Z','+00:00'))
+                    except ValueError:
+                        raise OperationDeniedError('Approval expiry is unconfirmed') from None
+                if not isinstance(expiry,datetime):
+                    raise OperationDeniedError('Approval expiry is unconfirmed')
+                if expiry.tzinfo is None:
+                    expiry = expiry.replace(tzinfo=UTC)
+                if expiry <= datetime.now(UTC):
+                    raise OperationDeniedError('Plan approval has expired')
             managed_admission = demo_session is not None and user.authentication != 'guest'
             if managed_admission: demo_session.acquire()
             try:

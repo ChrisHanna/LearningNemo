@@ -81,6 +81,33 @@ async def test_proxy_distinguishes_expired_lease_from_unconfirmed_sql(monkeypatc
             await proxy.request('POST', '/invoices/scenarios', 'fixture', {'scenario_id':'a'*32,'variant':'healthy'})
 
 
+async def test_failed_independent_verification_is_reported_not_called_unavailable(monkeypatch):
+    import httpx
+    import pytest
+    from task_agent.console import remote_invoice
+    from task_agent.control.invoice_repository import VERIFICATION_FAILED
+    responses = [httpx.Response(409, json={'detail': VERIFICATION_FAILED}),
+        httpx.Response(409, json={'detail': 'owned execution record required'}),
+        httpx.Response(500, text='Internal Server Error')]
+    class Client:
+        def __init__(self, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def request(self, *args, **kwargs): return responses.pop(0)
+    monkeypatch.setattr(remote_invoice.httpx, 'AsyncClient', Client)
+    domain = '.internal.jollybeach-503c7ed1.eastus.azurecontainerapps.io'
+    proxy = remote_invoice.RemoteInvoiceService('https://ca-nemo-invoice-operator-dev'+domain,
+        'https://ca-nemo-invoice-review-dev'+domain)
+    endpoint = '/invoices/plans/' + 'b'*32 + '/reconcile'
+    with pytest.raises(remote_invoice.InvoiceRemoteError, match='Independent verification failed.*start a new investigation') as failed:
+        await proxy.request('POST', endpoint, 'fixture', {'plan_hash': 'c'*64})
+    assert failed.value.status_code == 409
+    with pytest.raises(remote_invoice.InvoiceRemoteError, match='Plan or run state changed'):
+        await proxy.request('POST', endpoint, 'fixture', {'plan_hash': 'c'*64})
+    with pytest.raises(remote_invoice.InvoiceRemoteError, match='no successful outcome assumed'):
+        await proxy.request('POST', endpoint, 'fixture', {'plan_hash': 'c'*64})
+
+
 def test_reconciliation_requires_operator_execution_scope_and_verified_owner():
     calls = []
     async def reconcile(plan_id, plan_hash, **identity):

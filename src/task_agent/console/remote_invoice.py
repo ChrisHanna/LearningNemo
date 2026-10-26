@@ -95,6 +95,13 @@ class RemoteInvoiceService:
                         detail = None
                     if detail == {'detail': 'Invoice service lease expired'}:
                         raise InvoiceRemoteError(503, 'Invoice service lease expired. This request was rejected before execution. The demo operator must renew the service window.')
+                if response.status_code == 409 and len(response.content) <= 4096:
+                    try:
+                        detail = response.json().get('detail')
+                    except (ValueError, AttributeError):
+                        detail = None
+                    if isinstance(detail, str) and detail.startswith('Independent verification failed'):
+                        raise InvoiceRemoteError(409, detail)
                 messages = {401: 'Session expired; sign in again', 403: 'Invoice operation denied for this identity',
                             409: 'Plan or run state changed. Refresh persisted status before continuing'}
                 raise InvoiceRemoteError(response.status_code if response.status_code in messages else 503,

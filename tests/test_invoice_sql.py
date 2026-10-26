@@ -128,8 +128,24 @@ def test_invoice_migration_inventory_keeps_all_applied_sources():
     spec.loader.exec_module(module)
     expected = tuple(path.name for path in sorted(SQL.parent.glob('0*_invoice_*.sql')))
     assert module.INVOICE_MIGRATIONS == expected
-    assert len(expected) == 12
-    assert expected[-2:] == ('018_invoice_demo_lifecycle.sql', '019_invoice_public_demo.sql')
+    assert len(expected) == 14
+    assert expected[-2:] == ('020_invoice_guest_review_evidence.sql', '021_invoice_demo_quota_window.sql')
+
+
+def test_demo_quota_window_preserves_atomicity_counts_and_automatic_expiry():
+    from sqlfluff.core import Linter
+    source=(SQL.parent/'021_invoice_demo_quota_window.sql').read_text()
+    assert not Linter(dialect='tsql').parse_string(source).violations
+    assert "'2026-10-27T04:00:00.000'" in source
+    assert '@visitor_limit int = 3, @global_limit int = 25' in source
+    assert 'IF @now < @demo_until' in source
+    assert 'SET @visitor_limit = NULL' in source and 'SET @global_limit = 100' in source
+    assert '@visitor_limit IS NOT NULL AND @visitor >= @visitor_limit' in source
+    assert '@global >= @global_limit' in source
+    assert 'WITH (UPDLOCK, HOLDLOCK)' in source
+    assert 'invoice_guest_launch_conflict' in source
+    assert 'DELETE ' not in source and 'TRUNCATE ' not in source
+    assert '@visitor_limit AS visitor_limit, @global_limit AS global_limit' in source
 
 
 def test_public_demo_quota_is_atomic_bounded_and_guest_only():
@@ -143,6 +159,10 @@ def test_public_demo_quota_is_atomic_bounded_and_guest_only():
     assert 'IF @visitor >= 3 OR @global >= 25' in admission
     assert "CASE WHEN @visitor >= 3 THEN 'hourly' ELSE 'daily' END" in admission
     assert 'BEGIN TRANSACTION' in admission and 'ROLLBACK TRANSACTION' in admission
+    review_evidence = (SQL.parent / '020_invoice_guest_review_evidence.sql').read_text()
+    assert not Linter(dialect='tsql').parse_string(review_evidence).violations
+    assert "CONVERT(varchar(30), invoice_plan.ReviewExpiresAt, 126) + 'Z' AS review_expires_at" in review_evidence
+    assert 'evidence.EvidenceJson AS evidence_json' in review_evidence
     assert 'control.usp_admit_invoice_guest_launch' in GRANTS['jobs']
     assert 'control.usp_review_guest_invoice_plans' in GRANTS['review']
     assert 'control.usp_decide_guest_invoice_plan' in GRANTS['review']

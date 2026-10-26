@@ -103,7 +103,7 @@ class InvoiceIdentityVerifier:
             if guest_persona == "operator"
             else frozenset({"agent.invoke", "plans.review"})
         )
-        subject = f"learningnemo-public-guest-v1:{guest_subject}"
+        subject = f"learningnemo-public-guest-v1:{guest_persona}:{guest_subject}"
         return ReviewIdentity(
             subject_hash=hashlib.sha256(subject.encode()).hexdigest(),
             persona=guest_persona,

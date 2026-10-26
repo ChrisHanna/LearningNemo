@@ -21,9 +21,10 @@ SECRET_PATTERNS = (
 
 ROLE_TOOLS = {
     'planning': ('invoice_summary', 'invoice_batches', 'publish_decision'),
-    'execution': ('execute_step',),
+    'execution': ('execute_step', 'finish_execution'),
 }
-TOOL_ARGUMENTS = {'invoice_summary': None, 'invoice_batches': None, 'publish_decision': PlanningDecision, 'execute_step': InvoiceStep}
+TOOL_ARGUMENTS = {'invoice_summary': None, 'invoice_batches': None, 'publish_decision': PlanningDecision,
+                  'execute_step': InvoiceStep, 'finish_execution': None}
 MAX_TOOL_ARGUMENTS = 16384
 MAX_TOOL_RESULT = 65536
 MAX_RETRIEVAL_CHUNKS = 32768

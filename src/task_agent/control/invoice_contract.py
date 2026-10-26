@@ -33,6 +33,24 @@ class InvoiceEvidence(Record):
     def evidence_hash(self):
         return content_hash(self)
 
+    @property
+    def required_operations(self):
+        """Operations the independent verification profile needs, in catalog order, from observed state."""
+        needed = []
+        if self.duplicate_invoices > 0:
+            needed.append('invoice.quarantine-duplicates.v1')
+        if self.reported_cents != self.expected_cents:
+            needed.append('invoice.rebuild-total.v1')
+        if self.import_version == 'retry-unsafe-v1':
+            needed.append('invoice.activate-idempotent-import.v1')
+        return tuple(needed)
+
+
+def missing_operations(required, steps):
+    """Required operations that a proposal's steps do not include."""
+    proposed = {step.operation for step in steps}
+    return [operation for operation in required if operation not in proposed]
+
 
 class InvoiceStep(Record):
     step_id: int = Field(ge=1, le=3, strict=True)

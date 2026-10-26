@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
-from task_agent.control.invoice_contract import Identifier, InvoicePlan, InvoiceStep, PlanningDecision
+from task_agent.control.invoice_contract import Identifier, InvoicePlan, InvoiceStep, PlanningDecision, missing_operations
 from task_agent.control.invoice_governance import SignedDelegation, verify_delegation
 from task_agent.control.invoice_repository import capability_context
 from task_agent.control.telemetry import TelemetryCollector
@@ -57,8 +57,10 @@ class AgentSession:
         self.credential = credential or run_credential(manifest)
         self.calls = 0
         self.decision = None
+        self.required_operations = None
         self.receipts = []
         self.stopped = False
+        self.execution_finished = False
         self.telemetry = TelemetryCollector()
 
     def _correlation(self):
@@ -94,6 +96,10 @@ class AgentSession:
                 self.stopped = True
                 raise ValueError('tool returned invalid JSON; run stopped') from None
             self.emit('tool-returned', tool=tool, source='agent-runtime', http_status=200)
+            if tool == 'invoice_summary' and isinstance(result, dict):
+                required = (result.get('proposal_parameter_reference') or {}).get('required_operations')
+                if isinstance(required, list) and all(isinstance(item, str) for item in required):
+                    self.required_operations = required
             return result
 
     async def execute(self, step):
@@ -107,6 +113,16 @@ class AgentSession:
         receipt = await self.call('execute_step', step.model_dump(mode='json'))
         self.receipts.append(receipt)
         return receipt
+
+    def finish_execution(self):
+        """End local agent generation only after every approved receipt exists."""
+        plan = self.manifest.plan
+        if self.manifest.kind != 'execution' or plan is None or self.stopped or self.execution_finished:
+            raise ValueError('active execution agent required')
+        if len(self.receipts) != len(plan.steps):
+            raise ValueError('complete set of approved receipts required')
+        self.execution_finished = True
+        return {'executed_steps':len(self.receipts),'independently_verified':False}
 
 
 SESSION: ContextVar[AgentSession] = ContextVar('invoice_agent_session')
@@ -122,7 +138,7 @@ def register_tools():
     from nat.data_models.function import FunctionBaseConfig
 
     class InvoiceToolConfig(FunctionBaseConfig, name='invoice_agent_tool'):
-        operation: Literal['invoice_summary', 'invoice_batches', 'publish_decision', 'execute_step']
+        operation: Literal['invoice_summary', 'invoice_batches', 'publish_decision', 'execute_step', 'finish_execution']
 
     @register_function(config_type=InvoiceToolConfig)
     async def invoice_tool(config, _builder):
@@ -132,10 +148,20 @@ def register_tools():
                 session = SESSION.get()
                 if session.manifest.kind != 'planning' or session.decision is not None:
                     raise ValueError('one planning decision permitted')
+                if request.outcome == 'proposal' and session.required_operations is not None:
+                    missing = missing_operations(session.required_operations, request.steps)
+                    if missing:
+                        session.emit('tool-denied', tool='publish_decision', source='agent-runtime', reason='omits-required-operations')
+                        raise ValueError('proposal omits operations the evidence requires: ' + ', '.join(missing))
                 session.decision = request
                 session.emit('decision-produced', source='agent-runtime', outcome=request.outcome)
                 return json.dumps({'outcome': request.outcome, 'submitted': False})
             yield FunctionInfo.from_fn(publish, input_schema=PlanningDecision, description=publish.__doc__)
+        elif config.operation == 'finish_execution':
+            async def finish(request: EmptyInput) -> str:
+                """End this agent after all approved step receipts. Does not verify or close the plan."""
+                return json.dumps(SESSION.get().finish_execution())
+            yield FunctionInfo.from_fn(finish,input_schema=EmptyInput,description=finish.__doc__)
         elif config.operation == 'execute_step':
             async def execute(request: InvoiceStep) -> str:
                 """Request the next exact approved step. On an error, stop without retrying."""
@@ -217,7 +243,7 @@ async def run_agent(manifest, config_directory):
                         await runner.result()
             if manifest.kind == 'planning' and session.decision is None:
                 raise ValueError('agent did not produce a structured decision')
-            if manifest.kind == 'execution' and len(session.receipts) != len(manifest.plan.steps):
+            if manifest.kind == 'execution' and (not session.execution_finished or len(session.receipts) != len(manifest.plan.steps)):
                 raise ValueError('agent did not obtain every approved step receipt')
             emit('agent-finished', source='agent-runtime', decision=session.decision.model_dump(mode='json') if session.decision else None,
                  executed_steps=len(session.receipts), independently_verified=False)

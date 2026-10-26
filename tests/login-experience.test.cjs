@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const html = fs.readFileSync(require.resolve('../src/task_agent/console/static/index.html'), 'utf8');
 const script = fs.readFileSync(require.resolve('../src/task_agent/console/static/learningnemo.js'), 'utf8');
 const css = fs.readFileSync(require.resolve('../src/task_agent/console/static/openai-theme.css'), 'utf8');
+const invoiceCss = fs.readFileSync(require.resolve('../src/task_agent/console/static/invoice.css'), 'utf8');
 
 test('signed-out users receive a dedicated role-aware login experience', () => {
   assert.equal((html.match(/<head>/g) || []).length, 1);
@@ -24,4 +25,6 @@ test('signed-out users receive a dedicated role-aware login experience', () => {
   assert.match(script, /loginApproverButton\.addEventListener\("click", \(\) => signInLocal\("approver"\)/);
   assert.match(css, /\.login-experience\s*\{/);
   assert.match(css, /@media \(max-width: 600px\)/);
+  assert.doesNotMatch(css, /html,\s*body\s*\{\s*height:\s*100%;\s*overflow:\s*hidden;\s*\}/);
+  assert.doesNotMatch(invoiceCss, /\.trace-events\s*\{[^}]*overflow-y:\s*auto/);
 });

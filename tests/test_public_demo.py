@@ -54,7 +54,7 @@ def public_client():
     return client, headers, remote, bootstrap
 
 
-def test_public_demo_uses_guest_roles_without_entra_and_blocks_execution():
+def test_public_demo_forwards_bounded_guest_execution_and_completion():
     client, headers, remote, bootstrap = public_client()
     assert bootstrap["session"]["authMode"] == "public-demo"
     assert bootstrap["session"]["status"] == "signed_out"
@@ -63,6 +63,13 @@ def test_public_demo_uses_guest_roles_without_entra_and_blocks_execution():
     assert signed_in.json()["grantedRoles"] == ["Task.Operator", "Task.Reader"]
 
     assert client.get("/api/invoices/plans").status_code == 200
+    assert client.get("/api/invoices/sandboxes").status_code == 200
+    sandbox_id = "e" * 32
+    assert client.post(
+        "/api/invoices/sandboxes/" + sandbox_id + "/delete",
+        headers=headers,
+        json={"sandbox_id": sandbox_id},
+    ).status_code == 200
     planning = {"job_id": "a" * 32, "kind": "planning", "target_id": "b" * 32}
     assert client.post("/api/invoices/jobs", headers=headers, json=planning).status_code == 202
     challenge_id = "d" * 32
@@ -73,15 +80,32 @@ def test_public_demo_uses_guest_roles_without_entra_and_blocks_execution():
     ).status_code == 202
     assert client.get(f"/api/invoices/challenges/{challenge_id}").status_code == 200
     execution = {**planning, "job_id": "c" * 32, "kind": "execution", "plan_hash": "d" * 64}
-    denied = client.post("/api/invoices/jobs", headers=headers, json=execution)
-    assert denied.status_code == 403
-    assert len(remote.calls) == 4
+    admitted = client.post("/api/invoices/jobs", headers=headers, json=execution)
+    assert admitted.status_code == 202
+    for action in ('reconcile','complete'):
+        assert client.post('/api/invoices/plans/'+'b'*32+'/'+action,headers=headers,json={'plan_hash':'d'*64}).status_code==200
+    assert len(remote.calls) == 9
     assert all(call[4]["guest_subject"] and call[4]["guest_persona"] == "operator" for call in remote.calls)
     assert client.post(
-        "/api/invoices/sandboxes/" + "e" * 32 + "/delete",
+        "/api/invoices/sandboxes/" + "f" * 32 + "/delete",
         headers=headers,
-        json={"sandbox_id": "e" * 32},
-    ).status_code == 403
+        json={"sandbox_id": "f" * 32},
+    ).status_code == 200
+
+
+def test_guest_cleanup_requires_operator_csrf_and_exact_confirmation():
+    client, headers, remote, _ = public_client()
+    sandbox_id = 'e' * 32
+    route = '/api/invoices/sandboxes/' + sandbox_id + '/delete'
+    assert client.get('/api/invoices/sandboxes').status_code == 401
+    assert client.post('/api/auth/start', headers=headers, json={'persona': 'operator'}).status_code == 200
+    assert client.post(route, json={'sandbox_id': sandbox_id}).status_code == 403
+    assert client.post(route, headers=headers, json={'sandbox_id': 'f' * 32}).status_code == 422
+    assert client.get(route).status_code == 403
+    assert client.post('/api/auth/start', headers=headers, json={'persona': 'approver'}).status_code == 200
+    assert client.get('/api/invoices/sandboxes').status_code == 403
+    assert client.post(route, headers=headers, json={'sandbox_id': sandbox_id}).status_code == 403
+    assert remote.calls == []
 
 
 class GuestVerifier:
@@ -95,7 +119,60 @@ class GuestVerifier:
         )
 
 
-def test_private_invoice_service_applies_quota_and_rejects_guest_execution():
+@pytest.mark.parametrize('fault',['not-owned','wrong-hash','not-approved','expired','missing-expiry','quota-denied'])
+def test_guest_execution_rejects_unsafe_admission_before_work(fault):
+    from task_agent.control.operations import OperationDeniedError
+    calls=[]
+    row={'plan_json':{'plan_id':'e'*32,'sponsor_hash':'a'*64},'plan_hash':'f'*64,
+         'state':'approved','approval_expires_at':'2099-01-01T00:00:00+00:00'}
+    if fault=='not-owned':row['plan_json']['sponsor_hash']='b'*64
+    if fault=='wrong-hash':row['plan_hash']='b'*64
+    if fault=='not-approved':row['state']='submitted'
+    if fault=='expired':row['approval_expires_at']='2000-01-01T00:00:00+00:00'
+    if fault=='missing-expiry':row['approval_expires_at']=None
+    async def plans(owner):
+        assert owner=='a'*64
+        return [row]
+    async def quota(*values):
+        calls.append(('quota',values))
+        raise OperationDeniedError('quota reached')
+    async def enqueue(**values):
+        raise AssertionError('denied execution must not enqueue work')
+    app=create_invoice_service(mode='operator',repository=SimpleNamespace(plans=plans,admit_guest_launch=quota),
+        identity_verifier=GuestVerifier(),expires_at=None,jobs=SimpleNamespace(enqueue=enqueue),availability_mode='operator-managed')
+    client=TestClient(app)
+    headers={'Authorization':'Bearer broker','X-LearningNeMo-Guest-Subject':'1'*64,'X-LearningNeMo-Guest-Persona':'operator'}
+    response=client.post('/invoices/jobs',headers=headers,json={'job_id':'d'*32,'kind':'execution','target_id':'e'*32,'plan_hash':'f'*64})
+    assert response.status_code==409
+    assert len(calls)==(1 if fault=='quota-denied' else 0)
+    assert client.post('/invoices/plans/'+'e'*32+'/execute',headers=headers,json={'plan_hash':'f'*64}).status_code==403
+
+
+def test_guest_operator_can_reconcile_and_complete_but_approver_cannot_execute():
+    calls=[]
+    async def reconcile(plan_id,plan_hash,*,sponsor_hash):
+        calls.append(('reconcile',plan_id,plan_hash,sponsor_hash))
+        return {'plan_id':plan_id,'plan_hash':plan_hash,'state':'verified','replayed_steps':0,'checks':{}}
+    async def sql_call(procedure,parameters):
+        calls.append((procedure,parameters))
+        return [{'plan_id':parameters['plan_id']}]
+    app=create_invoice_service(mode='operator',repository=SimpleNamespace(client=SimpleNamespace(call=sql_call)),
+        identity_verifier=GuestVerifier(),expires_at=None,reconciler=SimpleNamespace(reconcile=reconcile),availability_mode='operator-managed')
+    client=TestClient(app)
+    headers={'Authorization':'Bearer broker','X-LearningNeMo-Guest-Subject':'1'*64,'X-LearningNeMo-Guest-Persona':'operator'}
+    for action in ('reconcile','complete'):
+        assert client.post('/invoices/plans/'+'e'*32+'/'+action,headers=headers,json={'plan_hash':'f'*64}).status_code==200
+    assert calls[0]==('reconcile','e'*32,'f'*64,'a'*64)
+    assert calls[1]==('control.usp_complete_invoice_plan',{'plan_id':'e'*32,'plan_hash':'f'*64,'sponsor_hash':'a'*64})
+    public,csrf,remote,_=public_client()
+    assert public.post('/api/auth/start',headers=csrf,json={'persona':'approver'}).status_code==200
+    for action in ('reconcile','complete'):
+        assert public.post('/api/invoices/plans/'+'e'*32+'/'+action,headers=csrf,json={'plan_hash':'f'*64}).status_code==403
+    assert public.post('/api/invoices/jobs',headers=csrf,json={'job_id':'d'*32,'kind':'execution','target_id':'e'*32,'plan_hash':'f'*64}).status_code==403
+    assert remote.calls==[]
+
+
+def test_private_invoice_service_applies_quota_to_guest_planning_and_execution():
     calls = []
 
     async def admit_guest_launch(job_id, guest_hash):
@@ -127,7 +204,12 @@ def test_private_invoice_service_applies_quota_and_rejects_guest_execution():
         calls.append(("challenge-status", challenge_id, owner))
         return {"challenge_id": challenge_id, "kind": "denied-file", "state": "finished", "result": {}, "events": []}
 
-    repository = SimpleNamespace(admit_guest_launch=admit_guest_launch)
+    async def plans(owner):
+        assert owner=='a'*64
+        return [{'plan_json':{'plan_id':'e'*32,'sponsor_hash':owner},'plan_hash':'f'*64,'state':'approved',
+                 'approval_expires_at':'2099-01-01T00:00:00+00:00'}]
+
+    repository = SimpleNamespace(admit_guest_launch=admit_guest_launch,plans=plans)
     jobs = SimpleNamespace(enqueue=enqueue, work=work)
     challenges = SimpleNamespace(enqueue=challenge_enqueue, work=challenge_work, status=challenge_status)
     class HumanDemoGate:
@@ -161,12 +243,14 @@ def test_private_invoice_service_applies_quota_and_rejects_guest_execution():
     assert response.status_code == 202
     assert response.json()["quota"]["visitor_limit"] == 3
     assert calls[0] == ("quota", "b" * 32, "a" * 64)
-    denied = client.post(
+    execution = client.post(
         "/invoices/jobs",
         headers=headers,
         json={"job_id": "d" * 32, "kind": "execution", "target_id": "e" * 32, "plan_hash": "f" * 64},
     )
-    assert denied.status_code == 403
+    assert execution.status_code == 202
+    assert ('quota','d'*32,'a'*64) in calls
+    assert any(call[0]=='enqueue' and call[1]['kind']=='execution' and call[1]['plan_hash']=='f'*64 for call in calls)
     challenge_id = "6" * 32
     challenge = client.post(
         "/invoices/challenges",
@@ -194,6 +278,32 @@ def test_private_invoice_service_applies_quota_and_rejects_guest_execution():
         headers=headers,
         json={"session_id": "1" * 32},
     ).status_code == 403
+
+
+def test_private_guest_cleanup_preserves_owner_and_confirmation():
+    calls = []
+
+    async def inventory(owner):
+        calls.append(('inventory', owner))
+        return {'source': 'openshell-sandbox-inventory', 'sandboxes': [], 'remaining_count': 0}
+
+    async def delete(sandbox_id, owner):
+        calls.append(('delete', sandbox_id, owner))
+        return {'sandbox_id': sandbox_id, 'state': 'deleted', 'evidence_archived': True}
+
+    client = TestClient(create_invoice_service(
+        mode='operator', repository=SimpleNamespace(), identity_verifier=GuestVerifier(),
+        expires_at=None, availability_mode='operator-managed',
+        sandboxes=SimpleNamespace(inventory=inventory, delete=delete),
+    ))
+    headers = {'Authorization': 'Bearer broker', 'X-LearningNeMo-Guest-Subject': '1' * 64,
+               'X-LearningNeMo-Guest-Persona': 'operator'}
+    sandbox_id = 'e' * 32
+    route = '/invoices/sandboxes/' + sandbox_id + '/delete'
+    assert client.get('/invoices/sandboxes', headers=headers).status_code == 200
+    assert client.post(route, headers=headers, json={'sandbox_id': 'f' * 32}).status_code == 422
+    assert client.post(route, headers=headers, json={'sandbox_id': sandbox_id}).status_code == 200
+    assert calls == [('inventory', 'a' * 64), ('delete', sandbox_id, 'a' * 64)]
 
 
 def test_guest_review_reads_only_guest_queue_and_cannot_use_execution_routes():
@@ -275,8 +385,14 @@ async def test_guest_broker_requires_exact_workload_role_and_context():
         guest_subject="3" * 64,
         guest_persona="approver",
     )
+    operator_identity = await verifier.verify(
+        token,
+        guest_subject="3" * 64,
+        guest_persona="operator",
+    )
     assert identity.authentication == "guest"
     assert identity.persona == "approver"
     assert identity.scopes == frozenset({"agent.invoke", "plans.review"})
+    assert identity.subject_hash != operator_identity.subject_hash
     with pytest.raises(ValueError):
         await verifier.verify(token, guest_subject="invalid", guest_persona="operator")

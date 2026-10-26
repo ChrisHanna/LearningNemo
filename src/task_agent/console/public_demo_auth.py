@@ -49,8 +49,8 @@ class PublicDemoAuthManager:
             "acceptedRoles": ["Task.Operator", "Task.Approver"],
             "grantedScopes": sorted(user.scopes) if user else [],
             "grantedRoles": sorted(user.roles) if user else [],
-            "accountFingerprint": self._fingerprint if user else None,
-            "storageKey": hashlib.sha256(("public-demo:" + self._subject).encode()).hexdigest() if user else None,
+            "accountFingerprint": user.account_fingerprint if user else None,
+            "storageKey": hashlib.sha256(("public-demo:" + self._subject + ":" + user.persona).encode()).hexdigest() if user else None,
             "userCode": None,
             "verificationUri": None,
             "expiresAt": self._expires_at,
@@ -61,13 +61,14 @@ class PublicDemoAuthManager:
         if persona not in _ROLE_ACCESS:
             raise RuntimeError("Choose the Operator or Approver demo role")
         scopes, roles = _ROLE_ACCESS[persona]
+        fingerprint = hashlib.sha256((self._subject + ":" + persona).encode()).hexdigest()[:8].upper()
         self._expires_at = time.time() + 4 * 60 * 60
         self._user = AuthenticatedUser(
             persona=persona,
             access_token="public-demo-broker",
             scopes=scopes,
             roles=roles,
-            account_fingerprint=self._fingerprint,
+            account_fingerprint=fingerprint,
         )
         return self.snapshot()
 

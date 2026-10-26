@@ -215,7 +215,7 @@ function renderLoginExperience(session) {
       : "Use either local persona to experience the same incident from a different authority boundary."
     : "Sign in with your assigned Microsoft account. Verified application roles determine which actions are available.";
   elements.loginOperatorButton.querySelector("small").textContent = session.authMode === "public-demo"
-    ? "Investigate, propose, launch planning sandboxes, and submit work for independent review."
+    ? "Investigate, propose, obtain independent review, and execute your exact approved disposable invoice plan."
     : "Investigate, propose, launch sandbox tests, and execute approved work.";
   elements.loginAccessNote.textContent = local
     ? session.authMode === "public-demo"

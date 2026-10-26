@@ -16,8 +16,8 @@ def policy(kind):
 
 
 @pytest.mark.parametrize('kind', KINDS)
-def test_landlock_is_a_hard_requirement(kind):
-    assert policy(kind)['landlock'] == {'compatibility': 'hard_requirement'}
+def test_landlock_is_best_effort_for_microvm_guest_kernel(kind):
+    assert policy(kind)['landlock'] == {'compatibility': 'best_effort'}
 
 
 @pytest.mark.parametrize('kind', KINDS)

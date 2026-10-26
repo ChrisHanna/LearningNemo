@@ -289,7 +289,7 @@
 .proof-chain small { color: var(--muted); font-size: 12px; }
 .proof-chain strong { font-size: 14px; line-height: 1.4; }
 .evidence-provenance { font-size: 12px !important; color: var(--muted); }
-.trace-events { list-style: none; padding: 0; margin: 16px 0; max-height: 340px; overflow-y: auto; scrollbar-gutter: stable; }
+.trace-events { list-style: none; padding: 0; margin: 16px 0; }
 .same-sandbox-test { border-top: 1px solid var(--rule); padding: 18px 0; min-width: 0; }
 .same-sandbox-test h2 { font-size: 18px; margin: 0 0 12px; }
 .sandbox-test-binding { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 6px 12px; font-size: 12px; }
@@ -341,7 +341,7 @@
 .audience-stage .proof-chain li { padding: 20px 14px; border: 0; border-right: 1px solid var(--rule); }
 .audience-stage .proof-chain strong { font-size: 20px; }
 .audience-stage .proof-chain small { font-size: 15px; }
-.audience-stage .trace-events { display: flex; gap: 8px; max-height: 130px; }
+.audience-stage .trace-events { display: flex; gap: 8px; max-height: 130px; overflow-x: auto; }
 .audience-stage .trace-events li { flex: 0 0 270px; }
 .audience-stage .trace-event { height: 100%; grid-template-columns: 1fr; }
 .audience-stage .trace-event strong { font-size: 16px; }

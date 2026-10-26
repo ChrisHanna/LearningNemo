@@ -17,7 +17,8 @@ INVOICE_MIGRATIONS = (
     '008_invoice_lab.sql', '009_invoice_workflow.sql', '010_invoice_jobs.sql', '011_invoice_recovery.sql',
     '012_invoice_retention.sql', '013_invoice_review_window.sql', '014_invoice_bound_sandbox_test.sql',
     '015_invoice_retention_pressure.sql', '016_invoice_doubled_windows.sql', '017_invoice_agents_api.sql',
-    '018_invoice_demo_lifecycle.sql', '019_invoice_public_demo.sql',
+    '018_invoice_demo_lifecycle.sql', '019_invoice_public_demo.sql', '020_invoice_guest_review_evidence.sql',
+    '021_invoice_demo_quota_window.sql',
 )
 
 

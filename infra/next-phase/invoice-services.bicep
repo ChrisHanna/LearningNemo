@@ -73,7 +73,7 @@ resource apps 'Microsoft.App/containerApps@2025-01-01' = [for (kind,index) in ki
           { name: 'OPENAI_BASE_URL', value: modelOrigin }
           { name: 'OPENAI_GUARDRAIL_BASE_URL', value: guardrailOrigin }
         ]
-        resources: { cpu: json('0.5'), memory: '1Gi' }
+        resources: { cpu: json(contains(['planning','execution'],kind) ? '1.0' : '0.5'), memory: contains(['planning','execution'],kind) ? '2Gi' : '1Gi' }
         probes: [{ type: 'Startup', httpGet: { path: '/healthz', port: 8080 }, failureThreshold: 24, periodSeconds: 5 }]
       }]
       scale: { minReplicas: 1, maxReplicas: 1 }

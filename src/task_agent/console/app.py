@@ -81,6 +81,7 @@ def _public_demo_api_allowed(method: str, path: str) -> bool:
             "/api/showcase",
             "/api/invoices/plans",
             "/api/invoices/demo-session",
+            "/api/invoices/sandboxes",
         } or any(
             re.fullmatch(pattern, path)
             for pattern in (
@@ -100,8 +101,9 @@ def _public_demo_api_allowed(method: str, path: str) -> bool:
         } or any(
             re.fullmatch(pattern, path)
             for pattern in (
-                r"/api/invoices/plans/[a-f0-9]{32}/submit",
+                r"/api/invoices/plans/[a-f0-9]{32}/(submit|reconcile|complete)",
                 r"/api/invoices/review/[a-f0-9]{32}",
+                r"/api/invoices/sandboxes/[a-f0-9]{32}/delete",
             )
         )
     return False
@@ -255,8 +257,6 @@ def create_app(
                 raise HTTPException(403, 'Independent Approver scope and role required')
         else:
             user = require_incident_operator(request, read_only=True)
-            if getattr(auth, "brokered", False) and path == '/invoices/jobs' and body.get('kind') == 'execution':
-                raise HTTPException(403, 'Public demo execution is disabled')
             if method == 'POST' and (path.endswith(('/complete','/reconcile','/sandbox-test','/delete')) or path in ('/invoices/scenarios','/invoices/challenges','/invoices/demo-session/start','/invoices/demo-session/end') or path == '/invoices/jobs' and body.get('kind') == 'execution') and 'tasks.execute' not in user.scopes:
                 raise HTTPException(403, 'Execution scope required')
         try:

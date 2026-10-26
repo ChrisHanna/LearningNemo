@@ -22,6 +22,17 @@ REPOSITORY = 'learningnemo/invoice-agent'
 VM_ARGS = ['vm', 'run-command', 'invoke', '-g', 'rg-learningnemo-saw-dev', '-n', 'vm-learningnemo-saw-dev', '--command-id', 'RunShellScript', '--scripts']
 
 
+def require_staged_image(state, image):
+    """Reject a release whose exact private sandbox digest was never staged."""
+    path = Path(state) / 'invoice-image-staged.verified.json'
+    if not path.is_file():
+        raise ValueError('Stage the pinned invoice agent image before deployment')
+    receipt = json.loads(path.read_text())
+    if receipt.get('image') != image or receipt.get('rootless_uid') != 1000:
+        raise ValueError('Staged invoice image receipt differs from deployment digest')
+    return receipt
+
+
 def seal(public_pem, plaintext, run_id):
     public = serialization.load_pem_public_key(public_pem.encode('ascii'))
     key, nonce = AESGCM.generate_key(bit_length=256), os.urandom(12)

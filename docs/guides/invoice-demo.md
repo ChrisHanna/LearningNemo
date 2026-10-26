@@ -25,22 +25,47 @@ Microsoft Entra sign-in. Each browser can choose an opaque guest Operator or
 Approver identity. Guest Operators may launch Planning investigations and submit
 plans for independent review. Guest Approvers may review only guest-created
 submitted plans, and the existing self-review restriction prevents the plan
-sponsor from approving their own plan. Execution, demo Start/End controls,
-sandbox deletion, sandbox challenges, reconciliation, and plan completion remain
-unavailable to guests. Use the Entra-protected console for those operations.
+sponsor from approving their own plan. Guest Operators may also refresh sandbox
+inventory and request deletion of their own verified, completed sandboxes using
+the exact sandbox ID. Backend ownership, evidence archival, stopped-state and
+active-work checks still apply; uncertain or failed runs are not made deletable
+by this permission. Guest Operators may run an Execution agent only for their
+own independently approved, unexpired plan and exact plan hash, inspect its
+persisted receipts without replaying steps, and acknowledge completion only
+after independent verification passes. These operations affect only the fixed,
+disposable invoice lab. Demo Start/End administration and direct untracked
+execution endpoints remain unavailable to guests.
 
-Public Planning admission is enforced atomically in Azure SQL: no more than
+Public sandbox admission is enforced atomically in Azure SQL: no more than
 three launches per guest in a rolling hour and no more than 25 public launches
 in a UTC day. Clearing browser state cannot bypass the global daily limit.
-Each launch may be a Planning agent run or one of the eight bounded Planning
+
+**Temporary October 25–26 demo window:** migration
+`021_invoice_demo_quota_window.sql` raises the shared limit to **100 launches
+per UTC day** and removes the per-guest hourly cap until **October 27, 2026,
+04:00 UTC** (the end of October 26 in the current UTC-04 local timezone).
+Existing counts are not reset. After that instant, the same procedure
+automatically restores 3 launches per guest/hour and 25 shared/day. Planning,
+Execution and bounded sandbox investigations all consume this shared budget.
+
+Each launch may be a Planning agent run, an approved Execution agent run, or one
+of the eight bounded Planning
 sandbox investigations: draft a query without executing it, read an allowed
 file, attempt a protected-file read, attempt direct SQL, attempt an `/app`
 write, call the approved Planning API, call an unapproved external API, or
-attempt a symlink escape. Execution-policy probes, same-sandbox follow-up
-tests, inventory/deletion controls, and Execution agents remain protected.
+attempt a symlink escape. Execution-policy probes and same-sandbox follow-up
+tests remain protected.
+Planning and Execution count separately toward the same launch limits, so a
+complete successful investigation normally consumes two launches.
 The public Container App uses a dedicated managed identity with only the
-`Invoice.GuestBroker` application role; that identity has no execution
-authority.
+`Invoice.GuestBroker` application role; it brokers bounded guest requests and
+has no direct SQL mutation or Azure remediation grants. The private operator,
+execution broker, and independent verifier retain their separate identities.
+Guest persona separation is a demonstration mechanism, not a claim that two
+separately authenticated human identities have been established.
+
+See the [guest execution rollout handoff](guest-execution-handoff.md) for the
+current verification limits and the one-shot post-quota-reset rehearsal.
 
 The apex domain is configured at Namecheap with:
 
@@ -55,6 +80,41 @@ removing `_dnsauth` can prevent managed-certificate renewal. `www.learningnemo.a
 is not configured.
 
 ## OpenShell Sandbox Tests
+
+### Investigation stops before agent activity
+
+The Operator workspace has **Reconnect run status** and **Reset view** controls.
+Reconnect checks the browser's blocking run and challenge, even when the current
+selection is a different investigation or a new blank draft. Reset first reads
+their persisted status and only clears the browser selection once all tracked
+work is terminal. Active, unavailable, mismatched or unconfirmed status blocks
+reset; an unresolved scenario-creation request is also retained.
+
+Reset does not stop agents, delete sandboxes or SQL evidence, or replay a
+request. Previous request IDs remain available in the recovery panel. An old
+uncertain scenario cannot be resubmitted merely by resetting the view: create
+new test data for a genuinely new investigation.
+
+The sequence `preparing-sandbox -> sandbox-bound -> authority-issued ->
+authority-revoked -> sandbox-stopped`, followed by an unconfirmed outcome, is
+not a successful investigation. Inspect the retained worker stderr and exit
+receipt using the exact run ID; do not replay that run.
+
+The October 25 investigation found an old sandbox agent rejecting the newer
+signed `delegation` manifest field. Recovery requires a compatible agent image,
+not removal of signature or extra-field validation. Stage the exact private
+image digest through the existing encrypted rootless-cache staging process
+before switching the operator's image pin, then wait for the new revision to be
+ready. The normal deployment preflight rejects a missing or mismatched staging
+receipt.
+
+First-time prepared-filesystem creation also needs temporary disk headroom.
+Deleting stopped sandboxes does not remove historical prepared-image caches.
+Only reclaim caches proven unreferenced and unused while the host is quiescent;
+retain run/SQL evidence and referenced images. A full first preparation may be
+slower than subsequent launches against the warmed prepared-image cache.
+
+See the [measured SQL audit and launch diagnosis](sql-audit-2026-10-25.md).
 
 The OpenShell sandbox tests tab runs eight bounded, deterministic scenarios: draft a
 read-only SQL query without executing it, read an allowed packaged config file,

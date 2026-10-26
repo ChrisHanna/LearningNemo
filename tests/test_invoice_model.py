@@ -47,6 +47,83 @@ def test_real_guardrails_configuration_builds():
 
 
 @pytest.mark.asyncio
+async def test_readonly_guardrail_recovers_once_from_transport_timeout(monkeypatch):
+    import json
+    from langchain_openai import ChatOpenAI
+    from nemoguardrails.rails.llm.options import RailType
+    requests=[]
+    def transport(request):
+        requests.append(request)
+        if len(requests)==1:
+            raise httpx.ReadTimeout('transient classifier transport timeout',request=request)
+        messages=json.loads(request.content)['messages']
+        verdict='on-topic' if any('topic guard' in (message.get('content') or '') for message in messages) else 'No'
+        return httpx.Response(200,json={'id':'classifier-test','object':'chat.completion','created':0,'model':'gpt-4o-mini',
+            'choices':[{'index':0,'message':{'role':'assistant','content':verdict},'finish_reason':'stop'}]})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
+        def model(**values):
+            return ChatOpenAI(**values,http_async_client=client)
+        monkeypatch.setattr('langchain_openai.ChatOpenAI',model)
+        rails=build_guardrails(base_url='https://apim-nemo-8370187d.azure-api.net/guardrails',api_key='fixture-only')
+        result=await rails.check_async(messages=[{'role':'user','content':'Investigate invoice totals without changing data.'}],rail_types=[RailType.INPUT])
+    assert result.status=='passed'
+    assert len(requests)==3  # failed input check, one retry, topical check
+    assert all(request.url.path=='/guardrails/chat/completions' for request in requests)
+    assert all(request.extensions['timeout']['read']==15 for request in requests)
+
+
+@pytest.mark.asyncio
+async def test_readonly_guardrail_retry_exhaustion_still_fails_closed(monkeypatch):
+    from langchain_openai import ChatOpenAI
+    from nemoguardrails.exceptions import LLMCallException
+    from nemoguardrails.rails.llm.options import RailType
+    requests=[]
+    def transport(request):
+        requests.append(request)
+        raise httpx.ReadTimeout('classifier transport unavailable',request=request)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
+        def model(**values):
+            return ChatOpenAI(**values,http_async_client=client)
+        monkeypatch.setattr('langchain_openai.ChatOpenAI',model)
+        rails=build_guardrails(base_url='https://apim-nemo-8370187d.azure-api.net/guardrails',api_key='fixture-only')
+        with pytest.raises(LLMCallException):
+            await rails.check_async(messages=[{'role':'user','content':'Investigate invoices'}],rail_types=[RailType.INPUT])
+    assert len(requests)==2
+
+
+@pytest.mark.asyncio
+async def test_classifier_rails_have_explicit_shared_deadlines(monkeypatch):
+    import asyncio
+    from task_agent.control import invoice_model
+    deadlines=[]
+    original_timeout=asyncio.timeout
+    def timeout(seconds):
+        deadlines.append(seconds)
+        return original_timeout(seconds)
+    async def checked(**kwargs):
+        return SimpleNamespace(status='passed')
+    monkeypatch.setattr(invoice_model.asyncio,'timeout',timeout)
+    gateway=InvoiceModelGateway(origin='https://apim-nemo-8370187d.azure-api.net/llm/v1',
+        client=None,api_key='fixture',rails=SimpleNamespace(check_async=checked))
+    assert await gateway.check([{'role':'user','content':'Investigate invoices'}])
+    assert await gateway.check_response('Ordinary invoice diagnosis',[],kind='planning',scenario_id='b'*32)
+    assert deadlines==[40,40]
+
+
+@pytest.mark.asyncio
+async def test_classifier_deadline_exhaustion_is_not_a_pass(monkeypatch):
+    from task_agent.control import invoice_model
+    async def checked(**kwargs):
+        raise TimeoutError('classifier deadline exhausted')
+    gateway=InvoiceModelGateway(origin='https://apim-nemo-8370187d.azure-api.net/llm/v1',
+        client=None,api_key='fixture',rails=SimpleNamespace(check_async=checked))
+    with pytest.raises(TimeoutError):
+        await gateway.check([{'role':'user','content':'Investigate invoices'}])
+    with pytest.raises(TimeoutError):
+        await gateway.check_response('Ordinary invoice diagnosis',[],kind='planning',scenario_id='b'*32)
+
+
+@pytest.mark.asyncio
 async def test_execution_checks_untrusted_plan_narrative_not_fixed_wrapper():
     import json
     from task_agent.control.invoice_contract import InvoicePlan
@@ -131,6 +208,9 @@ async def test_real_execution_rail_admits_only_contract_valid_role_tool_calls(re
     assert not await check('', [call('publish_decision', leaked)], kind='planning', scenario_id=SCENARIO)
     step = '{"step_id": 1, "operation": "invoice.rebuild-total.v1", "target": "%s", "expected_revision": 1}' % SCENARIO
     assert await check('', [call('execute_step', step)], kind='execution', scenario_id=SCENARIO)
+    assert await check('', [call('finish_execution', '{}')], kind='execution', scenario_id=SCENARIO)
+    assert not await check('', [call('finish_execution', '{"sql":"select 1"}')], kind='execution', scenario_id=SCENARIO)
+    assert not await check('', [call('finish_execution', '{}')], kind='planning', scenario_id=SCENARIO)
     assert not await check('', [call('invoice_summary', '{}')], kind='execution', scenario_id=SCENARIO)
 
 
@@ -161,6 +241,24 @@ async def test_real_execution_rail_checks_tool_results_before_the_model(real_gat
     assert not await check(messages('{"note": "Server=tcp:sql.example;Password=x"}'), kind='planning')
     assert not await check(messages('{"revision": 1}', call_id='other'), kind='planning')
     assert not await check(messages('{"revision": 1}', name='execute_step'), kind='planning')
+
+
+@pytest.mark.asyncio
+async def test_real_execution_rail_accepts_complete_multiturn_tool_history(real_gateway):
+    import json
+    history = [{'role':'user','content':'Investigate invoice totals'}]
+    turns = [('invoice_summary','{}',{'revision':1}),
+             ('invoice_batches','{}',{'batches':[]}),
+             ('publish_decision',decision(),{'outcome':'proposal','submitted':False})]
+    for index,(name,arguments,result) in enumerate(turns):
+        identifier='call-'+str(index)
+        history.extend([
+            {'role':'assistant','content':None,'tool_calls':[{'id':identifier,'type':'function','function':{'name':name,'arguments':arguments}}]},
+            {'role':'tool','tool_call_id':identifier,'content':json.dumps(result)},
+        ])
+        assert await real_gateway.check_tool_results(history,kind='planning')
+    history[4]['content']='{"note":"Password=fixture-secret"}'
+    assert not await real_gateway.check_tool_results(history,kind='planning')
 
 
 @pytest.mark.asyncio

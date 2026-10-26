@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from task_agent.control.invoice_contract import InvoiceStep, PlanningDecision
 from task_agent.control.invoice_model import OutputRailBlocked
+from task_agent.control.invoice_rails import ROLE_TOOLS
 from task_agent.control.invoice_repository import capability_context
 from task_agent.control.operations import OperationDeniedError
 from task_agent.control.sql_backend import SqlProcedureUnavailableError
@@ -151,7 +152,7 @@ def create_invoice_gateway(*, kind, repository, inference_admission, model_gatew
         authority = await inference_admission.admit(token, 'inference')
         if authority['kind'] != kind:
             raise OperationDeniedError('run role differs')
-        allowed = {'invoice_summary', 'invoice_batches', 'publish_decision'} if kind == 'planning' else {'execute_step'}
+        allowed = set(ROLE_TOOLS[kind])
         for tool in body.tools:
             if tool.get('type') != 'function' or tool.get('function', {}).get('name') not in allowed:
                 raise OperationDeniedError('model tool catalog differs')

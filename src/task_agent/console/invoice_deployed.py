@@ -23,6 +23,8 @@ from task_agent.console.invoice_probes import run_probe, run_prepared_probe
 from task_agent.console.invoice_availability import configured_expiry
 from task_agent.console.review_service import InvoiceIdentityVerifier
 from task_agent.control.invoice_controller import InvoiceController
+from task_agent.control.invoice_repository import VERIFICATION_FAILED
+from task_agent.control.operations import OperationDeniedError
 from task_agent.control.invoice_jobs import InvoiceJobs
 from task_agent.control.invoice_challenges import InvoiceChallenges
 from task_agent.control.invoice_model import InvoiceModelGateway, build_guardrails
@@ -46,6 +48,8 @@ class RemoteInvoiceVerifier:
         token=await asyncio.to_thread(self.credential.get_token,self.audience+'/.default')
         response=await self.client.post('https://ca-nemo-invoice-verifier-dev.internal.'+DOMAIN+'/verify',
             headers={'Authorization':'Bearer '+token.token},json={'run_id':run_id},timeout=60)
+        if response.status_code==409:
+            raise OperationDeniedError(VERIFICATION_FAILED)
         if response.status_code!=200:
             raise RuntimeError('independent invoice verification unconfirmed')
         return response.json()['checks']
@@ -85,7 +89,7 @@ def main():
             add_observation_route(app, repository, CloudJwtProvider(EntraTestSettings.from_sources()), os.environ['INVOICE_OPERATOR_OBJECT_ID'], expiry,availability_mode=availability_mode)
     elif kind=='operator':
         from azure.mgmt.compute import ComputeManagementClient
-        compute=ComputeManagementClient(credential,os.environ['AZURE_SUBSCRIPTION_ID'],polling_interval=3)
+        compute=ComputeManagementClient(credential,os.environ['AZURE_SUBSCRIPTION_ID'],polling_interval=1)
         runtime=AzureInvoiceRuntime(compute_client=compute,image=os.environ['INVOICE_AGENT_IMAGE'],policies=Path('/app/invoice-policies'),availability_mode=availability_mode,credential_mode=os.environ.get('INVOICE_CREDENTIAL_MODE','manifest'))
         verifier=RemoteInvoiceVerifier(http,credential,os.environ['INVOICE_VERIFIER_AUDIENCE'])
         jobs=InvoiceJobs(sql,None)
@@ -126,7 +130,10 @@ def main():
             verified=await provider.verify(value.credentials)
             if not verified.active or verified.object_id!=os.environ['INVOICE_OPERATOR_OBJECT_ID']:
                 raise HTTPException(403,'Only the invoice coordinator may request verification')
-            return {'checks':await repository.verify(body.run_id)}
+            try:
+                return {'checks':await repository.verify(body.run_id)}
+            except OperationDeniedError as error:
+                raise HTTPException(409,str(error)) from error
     else:
         raise ValueError('unknown invoice service role')
     uvicorn.run(app,host='0.0.0.0',port=8080,workers=1,proxy_headers=False)

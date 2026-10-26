@@ -26,6 +26,8 @@ workflow:
     - invoice_summary
     - invoice_batches
     - publish_decision
+  return_direct:
+    - publish_decision
   max_iterations: 8
   handle_tool_errors: false
   verbose: false
@@ -37,8 +39,12 @@ workflow:
     Publish exactly one structured decision supported by the summary evidence_hash.
     You may return no-change, insufficient-evidence, or no-permitted-resolution.
     A proposal may use only invoice.quarantine-duplicates.v1,
-    invoice.rebuild-total.v1, and invoice.activate-idempotent-import.v1 in that order,
-    omitting unnecessary operations. Bind every target to the observed scenario_id.
+    invoice.rebuild-total.v1, and invoice.activate-idempotent-import.v1 in that order.
+    invoice_summary lists the operations the evidence requires in
+    proposal_parameter_reference.required_operations. Independent verification
+    needs duplicates removed, the reported total reconciled, and the idempotent
+    importer active, so a proposal must include every listed operation and add no
+    unlisted one. Bind every target to the observed scenario_id.
     Start expected_revision at the observed revision and increment it for each step.
     Quarantine requires the exact observed duplicate_set_hash; all other steps
     require duplicate_set_hash null. Include evidence-backed rationale, uncertainties,

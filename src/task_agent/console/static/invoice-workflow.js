@@ -16,6 +16,7 @@
   let mode = 'workflow', probeMessage = '', selectionLoaded = false;
   let plansLoading = false, plansError = '', plansRead = 0, historyError = '';
   let scenarioLoading = false, scenarioError = '', deadlineSignature = '';
+  let recoveryBusy = false, recoveryMessage = '';
   let renderContext = null;
   const pendingSandboxTests = new Set();
   let sandboxInventory = null, sandboxLoading = false, sandboxError = '';
@@ -94,7 +95,7 @@
     },true);
   }
   async function refreshSandboxes(current = generation) {
-    if(publicGuest() || !demoActive() || sandboxLoading || !view.permissions(state.session).investigate || presenting)return;
+    if(!demoActive() || sandboxLoading || !view.permissions(state.session).investigate || presenting)return;
     sandboxLoading=true;sandboxError='';render();
     try {
       const result=await api('/api/invoices/sandboxes');
@@ -146,7 +147,7 @@
     });
   }
   async function pollProbe(current = generation) {
-    if (!demoActive() || !probe || probePolling || !signedIn()) return;
+    if (!demoActive() || !probe || probePolling || recoveryBusy || !signedIn()) return;
     clearTimeout(probeTimer); probePolling = true; const identifier = probe.challenge_id;
     try {
       const result = await api('/api/invoices/challenges/' + identifier);
@@ -226,6 +227,80 @@
     if (!identifier || approver()) return;
     if (identifier === job?.job_id) await poll();
     else await loadHistory(currentPlan(), generation, true, identifier);
+  }
+  function recoveryRequests() {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem('invoice-recovery:'+identity) || '[]');
+      return Array.isArray(saved) ? saved.filter(item => item && ['job_id','challenge_id','scenario_id'].some(key => /^[a-f0-9]{32}$/.test(item[key] || ''))).slice(-20) : [];
+    } catch { return []; }
+  }
+  async function reconnectWork() {
+    if (polling || probePolling || recoveryBusy || !view.permissions(state.session).investigate) return;
+    await request(async current => {
+      if (job) await poll(current);
+      if (current !== generation) return;
+      if (probe) await pollProbe(current);
+      if (current !== generation) return;
+      recoveryMessage = view.blocksNewWork(job) || probe && !['finished','uncertain'].includes(probe.state)
+        ? 'Work is still active or unconfirmed. No action was replayed. Check again before resetting the view.'
+        : 'Latest run status checked. You can reset the view to start a new investigation; previous work will not be replayed.';
+      render();
+    });
+  }
+  async function resetWorkspace() {
+    if (busy || presenting || polling || probePolling || recoveryBusy || !view.permissions(state.session).investigate) return;
+    if (!window.confirm('Reset this browser view? The latest run status will be checked first. Active or unconfirmed work cannot be cleared. Saved SQL plans, sandboxes and receipts will not be deleted, cancelled or replayed.')) return;
+    await request(async current => {
+      recoveryBusy = true; recoveryMessage = 'Checking persisted status before resetting the view…';
+      clearTimeout(timer); clearTimeout(probeTimer); render();
+      try {
+        if (job) {
+          const identifier = job.job_id, result = await api('/api/invoices/jobs/'+identifier);
+          if (current !== generation || job?.job_id !== identifier) return;
+          if (result.job_id !== identifier) throw new Error('Run status binding differs.');
+          job = result; remember();
+          if (view.blocksNewWork(job)) throw new Error('The run is still active or its outcome is not confirmed.');
+        }
+        if (probe) {
+          const identifier = probe.challenge_id, result = await api('/api/invoices/challenges/'+identifier);
+          if (current !== generation || probe?.challenge_id !== identifier) return;
+          if (result.challenge_id !== identifier) throw new Error('Challenge status binding differs.');
+          probe = result;
+          if (!['finished','uncertain'].includes(probe.state)) throw new Error('A sandbox challenge is still active or unconfirmed.');
+        }
+        if (draft.creationRequested && draft.scenarioStatus?.state !== 'created') {
+          const identifier = draft.scenarioId, result = await api('/api/invoices/scenarios/'+identifier);
+          if (current !== generation || draft.scenarioId !== identifier) return;
+          if (result.scenario_id !== identifier || result.source !== 'owned-scenario-status' || result.state !== 'created') throw new Error('Scenario creation remains unconfirmed. Keep its request ID.');
+          draft.scenarioStatus = result;
+        }
+        const retained = recoveryRequests();
+        if (job) {
+          history.set(job.job_id,{job,events:[...events],connected,observedAt});
+          retained.push({job_id:job.job_id,kind:job.kind,scenario_id:job.kind==='planning'?job.target_id:undefined,state:job.state});
+        }
+        if (probe) retained.push({challenge_id:probe.challenge_id,state:probe.state});
+        if (draft.scenarioId) retained.push({scenario_id:draft.scenarioId,state:draft.scenarioStatus?.state || 'selected'});
+        sessionStorage.setItem('invoice-recovery:'+identity,JSON.stringify(retained.slice(-20)));
+        sessionStorage.removeItem('invoice-job:'+identity);
+        sessionStorage.removeItem('invoice-challenge:'+identity);
+        job = null; probe = null; events = []; cursor = 0; connected = false; observedAt = null;
+        navigation += 1; selected = null; newInvestigation = true; newJobId = null;
+        draft = view.restoreSelection(null).draft; scenarioVariant = draft.variant;
+        step = 0; mode = 'workflow'; component = 'planning'; message = ''; probeMessage = ''; scenarioError = '';
+        recoveryMessage = 'View reset. Saved SQL plans, receipts and request IDs were retained. No operation was cancelled or replayed. Create new test data for a fresh investigation.';
+        saveSelection();
+      } catch (error) {
+        if (current === generation) recoveryMessage = 'View not reset. '+error.message+' Use Reconnect run status; no operation was repeated.';
+      } finally {
+        if (current === generation) {
+          recoveryBusy = false;
+          if (['queued','running'].includes(job?.state)) timer = setTimeout(()=>poll(current),3000);
+          if (['queued','running'].includes(probe?.state)) probeTimer = setTimeout(()=>pollProbe(current),3000);
+          render();
+        }
+      }
+    });
   }
   const button = (text, icon, handler, disabled = false) => { const element = node('button', text, 'button button-secondary'); element.type = 'button'; element.prepend(createIcon(icon)); element.disabled = disabled; element.addEventListener('click', handler); return element; };
   const iconButton = (label, icon, handler, disabled = false) => { const element = node('button', '', 'icon-button'); element.type = 'button'; element.title = label; element.setAttribute('aria-label', label); element.append(createIcon(icon)); element.disabled = disabled; element.addEventListener('click', handler); return element; };
@@ -317,7 +392,7 @@
     finally { if (current === generation && read === plansRead) { plansLoading = false; render(); } }
   }
   async function poll(current = generation) {
-    if (polling) return;
+    if (polling || recoveryBusy) return;
     clearTimeout(timer);
     if (!demoActive() || !job || current !== generation || !signedIn()) return;
     polling = true;
@@ -367,6 +442,9 @@
   }
   async function start(kind, target, hash) {
     if (!/^[a-f0-9]{32}$/.test(target || '')) { message = 'Select a valid scenario or plan.'; render(); return; }
+    if (kind === 'planning' && recoveryRequests().some(item => item.kind === 'planning' && item.state === 'uncertain' && item.scenario_id === target)) {
+      message = 'A previous investigation for this scenario is unconfirmed and will not be replayed. Create new test data for a fresh investigation.'; render(); return;
+    }
     if (kind === 'planning' && job?.kind === 'planning' && job.state === 'uncertain' && (job.target_id === target || draft.jobId === job.job_id)) {
       message = view.observation(job,events,true,observedAt).title + ' Reconnect observations; this attempt will not be replayed.'; render(); return;
     }
@@ -486,6 +564,18 @@
       }
     }
     if (access.investigate) {
+      const recovery = node('section','','invoice-demo-session'); recovery.setAttribute('aria-label','Workspace recovery');
+      recovery.append(button('Reconnect run status','refresh-cw',reconnectWork,busy || polling || probePolling || recoveryBusy),
+        button(recoveryBusy?'Checking before reset':'Reset view','rotate-ccw',resetWorkspace,busy || polling || probePolling || recoveryBusy));
+      recovery.append(node('small','Browser view only. Does not cancel active work, delete evidence or replay requests.'));
+      if (recoveryMessage) { const status = node('p',recoveryMessage,'mission-action-status'); status.setAttribute('role','status'); recovery.append(status); }
+      const retained = recoveryRequests();
+      if (retained.length) {
+        const previous = node('details'); previous.append(node('summary','Previous request IDs / retained for inspection'));
+        for (const item of retained) previous.append(node('p',(item.job_id?'Run '+item.job_id:item.challenge_id?'Challenge '+item.challenge_id:'Scenario '+item.scenario_id)+' / '+(item.state || 'unknown')));
+        recovery.append(previous);
+      }
+      root.append(recovery);
       const modePicker = node('section', '', 'invoice-mode-picker'); modePicker.setAttribute('aria-labelledby', 'invoiceModeTitle');
       const modeHeading = node('div', '', 'invoice-mode-heading');
       const modeTitle = node('h2', 'Explore the workflow or test OpenShell'); modeTitle.id = 'invoiceModeTitle';
@@ -506,6 +596,8 @@
       const status = node('div'); status.append(node('strong', runtimeError || runtime.label));
       if (runtimeSnapshot?.expiresAt) status.append(node('small', 'Observed host lease: '+new Date(runtimeSnapshot.expiresAt).toUTCString()));
       availability.append(status, button('Check runtime', 'refresh-cw', checkRuntime, busy)); root.append(availability);
+    }
+    if (access.investigate && state.invoiceInvestigationMode === 'openshell') {
       root.append(window.renderInvoiceSandboxInventory({inventory:sandboxInventory,loading:sandboxLoading,error:sandboxError,permitted:access.execute,busy:busy||active,pending:pendingSandboxDeletes,refresh:()=>refreshSandboxes(),remove:deleteSandbox}));
     }
     const flow = node('section'); flow.id = 'invoiceFlowPanel';
@@ -558,7 +650,7 @@
         for (const [value, text] of [['lost-acknowledgement','Import retry after lost acknowledgement'],['poisoned-batch-note','Poisoned batch telemetry / prompt-injection containment'],['healthy','Healthy idempotent import']]) { const option=node('option',text);option.value=value;variant.append(option); }
         variant.value = scenarioVariant; variant.addEventListener('change', () => { scenarioVariant = variant.value; draft.variant = scenarioVariant; saveSelection(); });
         variant.disabled=busy||active; variantLabel.append(variant); setup.append(variantLabel);
-        if (active) setup.append(node('p', 'Another run is active or its admission is unconfirmed. Reconnect observations before starting new work.'));
+        if (active) setup.append(node('p', 'Another run is active or its admission is unconfirmed. Use Reconnect run status above. Reset view becomes available after persisted work is confirmed terminal.'));
         const createFixture = button('Create invoice fixture','plus',() => createScenario(variant.value),active || !access.execute || Boolean(draft.scenarioId));
         createFixture.classList.replace('button-secondary','button-primary'); setup.append(createFixture);
         if (!draft.scenarioId) panel.append(setup);
@@ -622,15 +714,13 @@
         if (step === 2 && approver() && ['approved','rejected'].includes(row.state)) stageActions.append(node('p', row.state === 'approved' ? 'Plan approved. Return to the sponsoring Operator account for execution.' : 'Plan rejected. No execution authority was granted.'));
         if (step === 3 && row.state === 'approved' && !approver()) {
           const eligibility = view.executionStatus(row); stageActions.append(node('p', eligibility.label));
-          if (publicGuest()) stageActions.append(node('strong', 'Execution requires an Entra-protected Operator account.'));
-          else {
-            if (Number.isFinite(eligibility.expires)) stageActions.append(node('small','Start execution before '+new Date(eligibility.expires).toLocaleString()));
-            primaryAction(stageActions, 'Start Execution agent', () => start('execution', row.plan_json.plan_id, row.plan_hash), !eligibility.allowed || active || runtime.blocked || !access.execute);
-          }
+          if (publicGuest()) stageActions.append(node('small','Guest execution is limited to your exact independently approved disposable invoice plan and counts toward the sandbox quota.'));
+          if (Number.isFinite(eligibility.expires)) stageActions.append(node('small','Start execution before '+new Date(eligibility.expires).toLocaleString()));
+          primaryAction(stageActions, 'Start Execution agent', () => start('execution', row.plan_json.plan_id, row.plan_hash), !eligibility.allowed || active || runtime.blocked || !access.execute);
         }
-        if (step === 3 && row.state === 'executing' && !approver() && !publicGuest()) stageActions.append(button('Inspect execution receipts', 'scan-search', () => planAction('reconcile'), busy || active));
+        if (step === 3 && row.state === 'executing' && !approver()) stageActions.append(button('Inspect execution receipts', 'scan-search', () => planAction('reconcile'), busy || active));
         if (stageActions.childElementCount) panel.append(stageActions);
-        if (step === 4) { if (row.state === 'verified' && view.verifiedChecks(row) && !publicGuest()) panel.append(button('Acknowledge completion','check', () => planAction('complete'),busy || !access.execute)); else if (row.state === 'completed') panel.append(node('strong','Verified and completed')); }
+        if (step === 4) { if (row.state === 'verified' && view.verifiedChecks(row)) panel.append(button('Acknowledge completion','check', () => planAction('complete'),busy || !access.execute)); else if (row.state === 'completed') panel.append(node('strong','Verified and completed')); }
       } else if (step !== 0) panel.append(node('p', approver() ? 'No submitted plans awaiting review.' : 'No plan returned for this account.'));
       if (row && !approver()) {
         const scenarioExpired = Date.parse(row.scenario_expires_at) <= Date.now();
@@ -677,7 +767,7 @@
     find('missionWorkspace').hidden = true; find('identityWorkspace').hidden = true;
     const next = signedIn() ? state.session.persona + ':' + (state.session.storageKey || state.session.accountFingerprint) : null;
     const identityChanged = next !== identity;
-    if (identityChanged) { demoSession=null;demoLoading=false;demoError='';demoPending=null;demoWriting=false;demoVersion+=1;clearTimeout(demoTimer);presenting = false; traceSelections.clear(); pendingSandboxTests.clear(); pendingSandboxDeletes.clear(); sandboxInventory=null; sandboxLoading=false; sandboxError=''; mode = 'workflow'; probeMessage = ''; selectionLoaded = false; probeKind = 'query-draft'; runtimeSnapshot = null; runtimeError = ''; plansRead += 1; plansLoading = false; plansError = ''; historyError = ''; scenarioLoading = false; scenarioError = ''; }
+    if (identityChanged) { recoveryBusy=false;recoveryMessage='';demoSession=null;demoLoading=false;demoError='';demoPending=null;demoWriting=false;demoVersion+=1;clearTimeout(demoTimer);presenting = false; traceSelections.clear(); pendingSandboxTests.clear(); pendingSandboxDeletes.clear(); sandboxInventory=null; sandboxLoading=false; sandboxError=''; mode = 'workflow'; probeMessage = ''; selectionLoaded = false; probeKind = 'query-draft'; runtimeSnapshot = null; runtimeError = ''; plansRead += 1; plansLoading = false; plansError = ''; historyError = ''; scenarioLoading = false; scenarioError = ''; }
     if (identityChanged) { identity = next; generation += 1; navigation += 1; newInvestigation = false; newJobId = null; draft = view.restoreSelection(null).draft; clearTimeout(timer); clearTimeout(probeTimer); observations.clear(); probe=null; history.clear(); loadingHistory.clear(); plans = []; selected = null; job = null; events = []; cursor = 0; busy = false; message = ''; connected = false; observedAt = null; step = approver() ? 2 : 0; component = view.chapters[step].focus;
       if (identity) {
         const legacyIdentity = state.session.persona + ':' + state.session.accountFingerprint;

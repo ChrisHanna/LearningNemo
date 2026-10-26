@@ -1,32 +1,32 @@
 {
+  "version": 1,
   "key_id": "learningnemo-openshell-policy-ed25519-v1",
+  "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAYschcHIit8ATKy2CFP1/IF6dqtqlMXk+E7yMzQW0d38=\n-----END PUBLIC KEY-----\n",
   "policies": {
     "execution-policy.yaml": {
       "policy_hash": "6490a1f278d6dc1938487a3bceee0ddf286a6f9a8c2b8597332647fa9f5d03fa",
       "sha256": "b4e13599fdacb10b6c91d61f198b1670edfc97f343da363dbd2b69ab8f9b7dc3",
-      "signature": "2QRGyXl+7x9BaOzh2uBM2BPR0KxsCRr++leV8bqPV/xizVNCfi4XvBJjbA4GGANSgO04IyCyul/RS91ZA2H+Bw=="
+      "signature": "fkDYD8sok6p/NaZ2VdQe485N1+ljq5d+oz3HK7Yvo1IoE5cbHyJmnQ5jvPtEJdhzUYr26/McYQrVSFVA8G8RBQ=="
     },
     "invoice-execution-policy.yaml": {
-      "policy_hash": "a1703c5a985414dbc89828bc51d7a343454041f8b67b7ebafc04d865d15a143d",
-      "sha256": "aae075fc459d4f486b99403fdc6de1c536728458a0eb3b30ae191c473e1a3efa",
-      "signature": "pcBzD2jeZH5RczNlfBX+0jC+OMu59NfPyDShD5Q8nPn8yUxkkkWAL7mTki0MZD+NbF4WbsMVEeAg3k1RuxVQCg=="
+      "policy_hash": "880485d24244e4a3f8dce900f24b347bd08e8546ae02dc5f6767270d0d214983",
+      "sha256": "62e4eac62f9f50720755e00b8730d044bf565bd056b7e91fa77ac69d06465835",
+      "signature": "i3RxeYw8X8yIy+L9UCEgwnnwQJHu8g7PI9wM0JPdbs/AF7/GpqzybygjtfFuTgXmwgRZvo/jWMBjb/yZrbFuCQ=="
     },
     "invoice-planning-policy.yaml": {
-      "policy_hash": "ccfac57231976fe7cc026202f62f2eb55b5f1980327df91fc0e971d194e4f9e7",
-      "sha256": "998dc62eea559f7f91972a15543c8dee1b4c4b6bfbdb7611d4f1d3fdbcd668ad",
-      "signature": "2jYL6aCZD6F4tgtmrMz1NPrVD8IYBjEsf/9nPuYUQsVSzO6jyan+KbsX2gdSXUe2hgNYRzVE4iTkudZKd9aIBw=="
+      "policy_hash": "98da9d676d61defea88f78159a092054a19f16c54d9af178f93b0fe2e6ad36e0",
+      "sha256": "2e0101ce421c0f301c3a87c28e5a4a86de695f11af67b07d9719a91f8e86cf0d",
+      "signature": "8emzGvOiwF3M8M1iC7/RVO/tL911bAtKtRQhg9wQuqU+dhN+KGJdpx86Ky4FnAceh8RebfvzPy1O1HzTpZpRAg=="
     },
     "planning-policy.yaml": {
       "policy_hash": "0e32bcdce9233118056d8f6f7f4d515a75487e1045109c8dd9f06992972a403d",
       "sha256": "d5ff37aeaa0c3285cc3fcdda4e6ec456280e04c4c53d81adb2e794ec6b475144",
-      "signature": "qpYKnSh1NoxwjhDuLREvKHJK7OH8sh608JaIPJQRKeema/wcpnwqy1MTIUnhHcrvslipxzEClr/cInTtt70zBw=="
+      "signature": "HVdUY/mMc8iZhRNaa7IXs0dah7V7Xxbay0BagiIfUFt+otao7WdmKmwBeK6cvPBgoQgXfbMnIXpELeXpa1CqCA=="
     },
     "probe-policy.yaml": {
       "policy_hash": "54a6319ee06c030a62cf26e9927590c444d7f6019b0b1868c7910cffa38c267e",
       "sha256": "ae972c435ca44d6178a32d78f154684159ac43d0f9e0c824f8bbf5f68b3bf063",
-      "signature": "+WDaEK1vp40DaJ5wNKYrjIZt/yc7OWV/aqqMASGP5ByueHzEjTj/W7F3YLK0IGNIBmDLyW+mOOgi6YJfEjDoDg=="
+      "signature": "ctMsmVOOzxVpP8he6DPanl+M4t7O2/AfggjljikeJirnFY28RwQWecNWy0PGqtExYIg+0YAk2VTzd6CDk/G0DA=="
     }
-  },
-  "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAaBtLfW2RDrp2hUBECF+D2J7l/XiDQuNKA0bHSIdNstk=\n-----END PUBLIC KEY-----\n",
-  "version": 1
+  }
 }

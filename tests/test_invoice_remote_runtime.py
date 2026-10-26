@@ -78,7 +78,8 @@ async def test_remote_execution_scripts_compile_and_report_live_events(tmp_path)
             def launch(*args, **kwargs):
                 launches.append(args)
                 return SimpleNamespace(returncode=0)
-            local_source=source.split('import hashlib\n',1)[1].replace('/var/lib/learningnemo-invoice-cache/runs/'+context.run_id,str(tmp_path))
+            safe_tmp = str(tmp_path).replace('\\', '\\\\')
+            local_source=source.split('import hashlib\n',1)[1].replace('/var/lib/learningnemo-invoice-cache/runs/'+context.run_id,safe_tmp)
             scope=dict(hashlib=hashlib,os=os,pathlib=pathlib,uuid=uuid,json=json,base64=base64,serialization=serialization,
                 hashes=hashes,padding=padding,AESGCM=AESGCM,subprocess=SimpleNamespace(run=launch),
                 cli=lambda *args:json.dumps({'id':str(uuid.UUID(context.sandbox_id))}))

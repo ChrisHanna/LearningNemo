@@ -102,6 +102,20 @@ def test_execution_model_cannot_request_planning_tool():
     assert response.status_code == 403 and model.calls == 0
 
 
+def test_execution_catalog_accepts_local_finish_without_exposing_mutation_route():
+    client,repository,model,_=setup('execution')
+    headers={'Authorization':'Bearer '+new_capability('a'*32)}
+    body={'model':'gpt-4o-mini','messages':[{'role':'user','content':'Execute the approved artifact'}],
+        'tools':[{'type':'function','function':{'name':'execute_step'}},
+                 {'type':'function','function':{'name':'finish_execution','parameters':{'type':'object','properties':{}}}}]}
+    assert client.post('/v2/invoice/inference/v1/chat/completions',headers=headers,json=body).status_code==200
+    assert model.calls==1 and repository.calls==['inference']
+    assert client.post('/v2/invoice/tools/finish_execution',headers=headers,json={}).status_code==404
+    planning,_,planning_model,_=setup('planning')
+    assert planning.post('/v2/invoice/inference/v1/chat/completions',headers=headers,json=body).status_code==403
+    assert planning_model.calls==0
+
+
 def test_proposal_schema_target_is_bound_to_sql_admission():
     client, _, model, _ = setup()
     response = client.post('/v2/invoice/inference/v1/chat/completions',

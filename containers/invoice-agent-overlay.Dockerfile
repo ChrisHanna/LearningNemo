@@ -1,0 +1,8 @@
+FROM crlearningnemodevgruyrc4qwdvvm.azurecr.io/learningnemo/invoice-agent@sha256:5e7d90b2f1648d21a7926e97b67cfc62c5c3d84bd08f35a93861deaa6e9f9d27
+USER root
+COPY src/task_agent/control/invoice_agent.py src/task_agent/control/invoice_governance.py /opt/venv/lib/python3.12/site-packages/task_agent/control/
+COPY configs/invoice-planning.yml configs/invoice-execution.yml /app/configs/
+RUN chmod a+r /opt/venv/lib/python3.12/site-packages/task_agent/control/invoice_agent.py /opt/venv/lib/python3.12/site-packages/task_agent/control/invoice_governance.py && chmod -R a+rX /app/configs
+RUN ["/opt/venv/bin/python", "-c", "from task_agent.control.invoice_agent import RunManifest; from task_agent.control.invoice_governance import SignedDelegation,verify_delegation; assert RunManifest.model_fields['delegation'].annotation == SignedDelegation | None; assert RunManifest.model_config['extra'] == 'forbid'; print('PASS signed delegation manifest contract')"]
+RUN ["/opt/venv/bin/python", "-c", "import os; from pathlib import Path; from task_agent.control.invoice_agent import register_tools; from nat.runtime.loader import load_config; register_tools(); os.environ['OPENAI_API_KEY']='build-contract-only'; os.environ['INVOICE_MODEL_BASE_URL']='https://ca-nemo-invoice-planning-dev.jollybeach-503c7ed1.eastus.azurecontainerapps.io/v2/invoice/inference/v1'; assert [str(x) for x in load_config(Path('/app/configs/invoice-planning.yml')).workflow.return_direct]==['publish_decision']; assert [str(x) for x in load_config(Path('/app/configs/invoice-execution.yml')).workflow.return_direct]==['finish_execution']; print('PASS structured terminal-tool contracts')"]
+USER sandbox

@@ -8,10 +8,13 @@ import secrets
 from uuid import uuid4
 
 from task_agent.control.canonical import canonical_json, content_hash
-from task_agent.control.invoice_contract import InvoiceEvidence, InvoicePlan, InvoiceStep, PlanningDecision
+from task_agent.control.invoice_contract import InvoiceEvidence, InvoicePlan, InvoiceStep, PlanningDecision, missing_operations
 from task_agent.control.operations import OperationDeniedError
 from task_agent.control.sql_backend import SqlProcedureUnavailableError
 
+
+VERIFICATION_FAILED = ('Independent verification failed: the executed plan did not satisfy every integrity check. '
+                       'Do not replay it. Reset the view and start a new investigation.')
 
 CAPABILITY = re.compile(r'^([a-f0-9]{32})\.([A-Za-z0-9_-]{43})$')
 
@@ -59,6 +62,7 @@ class InvoiceRepository:
         return {**evidence.model_dump(mode='json'), 'evidence_hash': evidence.evidence_hash,
             'proposal_parameter_reference': {'target': evidence.scenario_id, 'first_expected_revision': evidence.revision,
                 'quarantine_duplicate_set_hash': evidence.duplicate_set_hash,
+                'required_operations': list(evidence.required_operations),
                 'registered_operations': ['invoice.quarantine-duplicates.v1', 'invoice.rebuild-total.v1', 'invoice.activate-idempotent-import.v1']}}
 
     async def batches(self, token):
@@ -81,6 +85,9 @@ class InvoiceRepository:
         for step in decision.steps:
             if step.duplicate_set_hash is not None and step.duplicate_set_hash != evidence.duplicate_set_hash:
                 raise OperationDeniedError('proposal changes the evidenced duplicate set')
+        missing = missing_operations(evidence.required_operations, decision.steps)
+        if missing:
+            raise OperationDeniedError('proposal omits operations the evidence requires for verification: ' + ', '.join(missing))
         plan = InvoicePlan(plan_id=uuid4().hex, scenario_id=evidence.scenario_id, sponsor_hash=sponsor_hash,
                            planning_run_id=run_id, planning_sandbox_id=sandbox_id, evidence_hash=evidence.evidence_hash,
                            created_at=self.clock(), diagnosis=decision.diagnosis, rationale=decision.rationale,
@@ -124,9 +131,15 @@ class InvoiceRepository:
         if not result.pop('admitted'):
             reason = result.pop('reason')
             if reason == 'hourly':
-                raise OperationDeniedError('Public demo limit reached: this guest can launch 3 Planning sandboxes per hour')
+                limit = result['visitor_limit']
+                if type(limit) is not int or limit < 1:
+                    raise SqlProcedureUnavailableError('public demo hourly limit unconfirmed')
+                raise OperationDeniedError(f'Public demo limit reached: this guest can launch {limit} agent or investigation sandboxes per hour')
             if reason == 'daily':
-                raise OperationDeniedError('Public demo daily limit reached: 25 Planning sandboxes have already launched today')
+                limit = result['global_limit']
+                if type(limit) is not int or limit < 1:
+                    raise SqlProcedureUnavailableError('public demo daily limit unconfirmed')
+                raise OperationDeniedError(f'Public demo daily limit reached: {limit} agent or investigation sandboxes have already launched today')
             raise SqlProcedureUnavailableError('public demo quota denial differs')
         result.pop('reason')
         return result
@@ -181,7 +194,12 @@ class InvoiceRepository:
         return rows
 
     async def verify(self, run_id):
-        rows = await self.client.call('ops.usp_verify_invoice_run', {'run_id': run_id})
+        try:
+            rows = await self.client.call('ops.usp_verify_invoice_run', {'run_id': run_id})
+        except SqlProcedureUnavailableError as error:
+            if 'invoice_independent_verification_failed' in str(error.__cause__):
+                raise OperationDeniedError(VERIFICATION_FAILED) from error
+            raise
         if len(rows) != 1:
             raise SqlProcedureUnavailableError('independent verification unavailable')
         checks = json.loads(rows[0]['verification_json'])

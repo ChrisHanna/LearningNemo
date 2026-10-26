@@ -25,13 +25,114 @@ function workflow(api, initial = {}) {
     demoPending = JSON.parse(storage.get('invoice-demo-pending:operator:test') || 'null');
     sandboxInventory = initial.sandboxInventory || null; probe = initial.probe || null;
     window.fixture = { refreshPlans, planAction, reconnect, poll, pollProbe, start, loadHistory, history, createScenario, checkScenario, beginInvestigation, requestSandboxTest, refreshSandboxes, deleteSandbox, refreshDemo, demoAction, modeOptions, storage,
-      snapshot: () => ({ busy, plansLoading, plansError, message, plans, selected, historyError, draft, scenarioError, step, newInvestigation, job, probe, probeMessage, demoPending, demoError, demoActive: demoActive(), demoSession }) };
+      resetWorkspace: typeof resetWorkspace === 'function' ? resetWorkspace : undefined,
+      reconnectWork: typeof reconnectWork === 'function' ? reconnectWork : undefined,
+      snapshot: () => ({ busy, plansLoading, plansError, message, plans, selected, historyError, draft, scenarioError, step, newInvestigation, job, probe, probeMessage, demoPending, demoError, demoActive: demoActive(), demoSession, recoveryMessage: typeof recoveryMessage === 'string' ? recoveryMessage : '' }) };
   })();`), context);
   return window.fixture;
 }
 
 const planId = 'a'.repeat(32), runId = 'b'.repeat(32), otherRun = 'c'.repeat(32);
 const row = () => ({ state: 'draft', plan_hash: 'hash', review_expires_at: new Date(Date.now()+1800000).toISOString(), plan_json: { plan_id: planId, planning_run_id: runId, created_at: new Date().toISOString() } });
+
+test('reset view rechecks a stale run, preserves its ID and clears only browser selection', async () => {
+  const calls = [], scenarioId = 'd'.repeat(32);
+  const fixture = workflow(async (path, options) => {
+    calls.push({path,method:options?.method || 'GET'});
+    assert.equal(path,'/api/invoices/jobs/'+runId);
+    return {job_id:runId,kind:'planning',target_id:scenarioId,state:'uncertain'};
+  }, {job:{job_id:runId}, draft:{scenarioId,jobId:runId}, storage:[['invoice-job:operator:test',JSON.stringify({job_id:runId})]]});
+  await fixture.resetWorkspace();
+  const snapshot = fixture.snapshot();
+  assert.equal(snapshot.job,null);
+  assert.equal(snapshot.probe,null);
+  assert.equal(snapshot.draft.scenarioId,'');
+  assert.equal(snapshot.newInvestigation,true);
+  assert.equal(fixture.storage.has('invoice-job:operator:test'),false);
+  const retained = JSON.parse(fixture.storage.get('invoice-recovery:operator:test'));
+  assert.equal(retained.find(item=>item.job_id===runId).job_id,runId);
+  assert.equal(retained.at(-1).scenario_id,scenarioId);
+  assert.deepEqual(calls,[{path:'/api/invoices/jobs/'+runId,method:'GET'}]);
+  assert.match(snapshot.recoveryMessage,/view reset/i);
+});
+
+test('reset view cannot hide active or unconfirmed backend work', async () => {
+  for (const state of ['queued','running','admission-unconfirmed',undefined]) {
+    const fixture = workflow(async () => ({job_id:runId,state}), {job:{job_id:runId,state:'admission-unconfirmed'}});
+    await fixture.resetWorkspace();
+    assert.equal(fixture.snapshot().job.job_id,runId);
+    assert.match(fixture.snapshot().recoveryMessage,/not reset/i);
+  }
+  for (const status of [401,403,404,409,503]) {
+    const fixture = workflow(async () => {throw Object.assign(new Error('Unavailable'),{status});}, {job:{job_id:runId}});
+    await fixture.resetWorkspace();
+    assert.equal(fixture.snapshot().job.job_id,runId);
+    assert.match(fixture.snapshot().recoveryMessage,/not reset/i);
+  }
+});
+
+test('reset view checks a hidden challenge before releasing the global work lock', async () => {
+  const challengeId = 'e'.repeat(32);
+  const fixture = workflow(async path => {
+    assert.equal(path,'/api/invoices/challenges/'+challengeId);
+    return {challenge_id:challengeId,state:'running'};
+  }, {probe:{challenge_id:challengeId,state:'admission-unconfirmed'}});
+  await fixture.resetWorkspace();
+  assert.equal(fixture.snapshot().probe.challenge_id,challengeId);
+  assert.match(fixture.snapshot().recoveryMessage,/not reset/i);
+});
+
+test('reconnect work follows the blocking run even when a new blank draft is selected', async () => {
+  const calls = [];
+  const fixture = workflow(async path => {
+    calls.push(path);
+    if(path.endsWith('/events?after=0'))return {job_id:runId,events:[]};
+    if(path==='/api/invoices/jobs/'+runId)return {job_id:runId,state:'uncertain',kind:'planning',target_id:'d'.repeat(32)};
+    throw new Error('Unexpected request '+path);
+  }, {job:{job_id:runId},newInvestigation:true,newJobId:null});
+  await fixture.reconnectWork();
+  assert.equal(fixture.snapshot().job.state,'uncertain');
+  assert.deepEqual(calls,['/api/invoices/jobs/'+runId,'/api/invoices/jobs/'+runId+'/events?after=0']);
+});
+
+test('reset remains atomic when a terminal run has a hidden active challenge', async () => {
+  const challengeId='e'.repeat(32);
+  const fixture=workflow(async path => path.includes('/jobs/')
+    ? {job_id:runId,kind:'planning',state:'finished'}
+    : {challenge_id:challengeId,state:'running'}, {
+    job:{job_id:runId},probe:{challenge_id:challengeId,state:'admission-unconfirmed'},
+    storage:[['invoice-job:operator:test',JSON.stringify({job_id:runId})],['invoice-challenge:operator:test',challengeId]],
+  });
+  await fixture.resetWorkspace();
+  assert.equal(fixture.snapshot().job.job_id,runId);
+  assert.equal(fixture.snapshot().probe.challenge_id,challengeId);
+  assert.equal(fixture.storage.has('invoice-job:operator:test'),true);
+  assert.equal(fixture.storage.has('invoice-challenge:operator:test'),true);
+});
+
+test('reset retains an unconfirmed scenario creation request and never posts it again', async () => {
+  const scenarioId='d'.repeat(32),calls=[];
+  const fixture=workflow(async (path,options)=>{
+    calls.push({path,method:options?.method || 'GET'});
+    return {scenario_id:scenarioId,source:'owned-scenario-status',state:'unconfirmed'};
+  },{draft:{scenarioId,creationRequested:true,scenarioStatus:{scenario_id:scenarioId,source:'owned-scenario-status',state:'unconfirmed'}}});
+  await fixture.resetWorkspace();
+  assert.equal(fixture.snapshot().draft.scenarioId,scenarioId);
+  assert.match(fixture.snapshot().recoveryMessage,/not reset/i);
+  assert.deepEqual(calls,[{path:'/api/invoices/scenarios/'+scenarioId,method:'GET'}]);
+});
+
+test('reset view preserves the same-scenario uncertain-run replay guard', async () => {
+  const scenarioId='d'.repeat(32),calls=[];
+  const fixture=workflow(async (path,options)=>{
+    calls.push({path,method:options?.method || 'GET'});
+    return {job_id:runId,kind:'planning',target_id:scenarioId,state:'uncertain'};
+  },{job:{job_id:runId,state:'uncertain',kind:'planning',target_id:scenarioId}});
+  await fixture.resetWorkspace();
+  await fixture.start('planning',scenarioId);
+  assert.match(fixture.snapshot().message,/previous investigation.*unconfirmed.*not be replayed/);
+  assert.deepEqual(calls,[{path:'/api/invoices/jobs/'+runId,method:'GET'}]);
+});
 
 test('mode choices distinguish the governed workflow from OpenShell sandbox tests', () => {
   const fixture = workflow(async () => ({}));
@@ -75,6 +176,16 @@ test('public guest quota status is accepted as active without a human demo expir
   assert.equal(fixture.snapshot().demoActive, true);
   assert.equal(fixture.snapshot().demoSession.source, 'public-demo-quota');
   assert.deepEqual(calls, ['/api/invoices/demo-session', '/api/invoices/plans']);
+});
+
+test('guest operator can explicitly refresh sandbox inventory without a mutation', async () => {
+  const calls = [];
+  const fixture = workflow(async (path, options) => {
+    calls.push({path, method:options?.method || 'GET'});
+    return {source:'openshell-sandbox-inventory', sandboxes:[], remaining_count:0};
+  }, {authMode:'public-demo', demoSession:{source:'public-demo-quota',state:'active'}});
+  await fixture.refreshSandboxes();
+  assert.deepEqual(calls, [{path:'/api/invoices/sandboxes',method:'GET'}]);
 });
 
 test('history loading and failure do not take the command lock or overwrite action status', async () => {

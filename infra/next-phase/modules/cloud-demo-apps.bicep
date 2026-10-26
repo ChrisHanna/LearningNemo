@@ -111,8 +111,8 @@ var services = [
     command: ['python', '/app/scripts/run-cloud-agent.py']
     port: 8001
     external: false
-    cpu: '2.0'
-    memory: '4Gi'
+    cpu: '1.0'
+    memory: '2Gi'
     health: '/health'
     customDomains: []
     env: concat(entra, [

@@ -179,7 +179,9 @@ button:focus-visible, a:focus-visible, textarea:focus-visible, summary:focus-vis
   --muted: #6e6e68;
   --teal: #0d8f72;
   --coral: #b6463c;
+  width: 100%;
   max-width: 1440px;
+  margin: 0 auto;
   padding: 32px 40px 48px;
 }
 .invoice-mission .mission-heading { margin-bottom: 22px; }
@@ -441,25 +443,6 @@ button:focus-visible, a:focus-visible, textarea:focus-visible, summary:focus-vis
 .invoice-secondary, .invoice-sandbox-inventory, .same-sandbox-test { border-color: var(--rule); }
 .invoice-mission summary { border-radius: 6px; }
 .invoice-mission summary:hover { color: var(--ink); }
-
-@media (min-width: 901px) {
-  html, body { height: 100%; overflow: hidden; }
-  .app-shell {
-    display: flex;
-    flex-direction: column;
-    height: 100dvh;
-    min-height: 0;
-  }
-  .app-shell > .topbar,
-  .app-shell > .session-bar,
-  .app-shell > .demo-footer { flex: 0 0 auto; }
-  .invoice-mission {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    scrollbar-gutter: stable;
-  }
-}
 
 @media (max-width: 900px) {
   .invoice-mission { padding: 26px 24px 40px; }

@@ -32,3 +32,19 @@ def test_staging_rejects_unpinned_or_external_images(monkeypatch):
     for image in ('example.com/image:latest', staging.REGISTRY + '/' + staging.REPOSITORY + ':latest'):
         with pytest.raises(ValueError):
             staging.pull_script('a' * 32, image, {})
+
+
+def test_release_requires_exact_rootless_staged_digest(monkeypatch, tmp_path):
+    import json
+    staging = module(monkeypatch)
+    image = staging.REGISTRY + '/' + staging.REPOSITORY + '@sha256:' + 'b' * 64
+    path = tmp_path/'invoice-image-staged.verified.json'
+    with pytest.raises(ValueError,match='Stage the pinned'):
+        staging.require_staged_image(tmp_path,image)
+    path.write_text(json.dumps({'image':image,'rootless_uid':1000}))
+    assert staging.require_staged_image(tmp_path,image)['image']==image
+    with pytest.raises(ValueError,match='differs'):
+        staging.require_staged_image(tmp_path,image.replace('b'*64,'c'*64))
+    path.write_text(json.dumps({'image':image,'rootless_uid':0}))
+    with pytest.raises(ValueError,match='differs'):
+        staging.require_staged_image(tmp_path,image)
