@@ -9,7 +9,7 @@ state="${LEARNINGNEMO_INFRA_STATE_DIR:-$HOME/.local/state/learningnemo}"
 registry=crlearningnemodevgruyrc4qwdvvm
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
-tar -C "$root" -cf - containers/invoice-agent-overlay.Dockerfile src/task_agent/control/invoice_agent.py src/task_agent/control/invoice_governance.py configs/invoice-planning.yml configs/invoice-execution.yml | tar -C "$stage" -xf -
+tar -C "$root" -cf - containers/invoice-agent-overlay.Dockerfile src/task_agent/control/invoice_agent.py src/task_agent/control/invoice_governance.py src/task_agent/control/invoice_contract.py configs/invoice-planning.yml configs/invoice-execution.yml | tar -C "$stage" -xf -
 revision="$(find "$stage" -type f -print0 | sort -z | xargs -0 sha256sum | sed "s|$stage/||" | sha256sum | cut -d' ' -f1)"
 image="learningnemo/invoice-agent:delegation-${revision:0:16}"
 az acr build --registry "$registry" --image "$image" --file containers/invoice-agent-overlay.Dockerfile --platform linux/amd64 "$stage" > "$state/invoice-agent-overlay-build.log" 2>&1

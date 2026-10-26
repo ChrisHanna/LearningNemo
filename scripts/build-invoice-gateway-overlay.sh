@@ -13,7 +13,7 @@ execution="$(az containerapp show -g rg-learningnemo-invoice-dev -n ca-nemo-invo
 [[ "$base" == "$execution" ]]
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
-tar -C "$root" -cf - containers/invoice-gateway-overlay.Dockerfile src/task_agent/control/invoice_model.py src/task_agent/control/invoice_rails.py src/task_agent/console/invoice_gateway.py | tar -C "$stage" -xf -
+tar -C "$root" -cf - containers/invoice-gateway-overlay.Dockerfile src/task_agent/control/invoice_model.py src/task_agent/control/invoice_rails.py src/task_agent/console/invoice_gateway.py src/task_agent/control/invoice_contract.py src/task_agent/control/invoice_repository.py | tar -C "$stage" -xf -
 revision="$(find "$stage" -type f -print0 | sort -z | xargs -0 sha256sum | sed "s|$stage/||" | sha256sum | cut -d' ' -f1)"
 image="learningnemo/invoice-services:tool-rails-${revision:0:16}"
 az acr build --registry "$registry" --image "$image" --file containers/invoice-gateway-overlay.Dockerfile --build-arg "BASE_IMAGE=$base" --platform linux/amd64 "$stage" > "$state/invoice-gateway-overlay-build.log" 2>&1
